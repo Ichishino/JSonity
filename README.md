@@ -28,6 +28,8 @@ Json::decode(jsonStr1, v);   // parse
 
 size_t size = v.getSize();  // 4
 
+bool check = v.hasName("name1");  // true
+
 int n = v["name1"];    // 100
 bool b = v["name2"];   // true
 

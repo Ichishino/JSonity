@@ -709,6 +709,8 @@ void example1()
 
     size_t size = v.getSize();
 
+    bool check = v.hasName("name1");
+
     int n = v["name1"];
     bool b = v["name2"];
 
@@ -720,6 +722,7 @@ void example1()
 
     const std::string& str = v["name4"];
 
+    JSONITY_ASSERT(check == true);
     JSONITY_ASSERT(size == 4);
     JSONITY_ASSERT(array_size == 3);
     JSONITY_ASSERT(n == 100);

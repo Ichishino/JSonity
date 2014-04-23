@@ -2,7 +2,7 @@
 
   JSonity : JSON Utility for C++   Version 0.0.1
 
-  Copyright (c) 2014, Ichishino <ichishino.madlab@gmail.com>
+  Copyright (c) 2014, Ichishino
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -2017,28 +2017,28 @@ private:
         char_t str[4];
         size_t size = 0;
 
-		if (codePoint1 <= 0x7f)
+        if (codePoint1 <= 0x7f)
         {
-			str[size++] = (char_t)(codePoint1 & 0xff);
+            str[size++] = (char_t)(codePoint1 & 0xff);
         }
-		else if (codePoint1 <= 0x7ff)
+        else if (codePoint1 <= 0x7ff)
         {
-			str[size++] = (char_t)(0xc0 | ((codePoint1 >> 6) & 0xff));
-			str[size++] = (char_t)(0x80 | ((codePoint1 & 0x3f)));
-		}
-		else if (codePoint1 <= 0xffff)
+            str[size++] = (char_t)(0xc0 | ((codePoint1 >> 6) & 0xff));
+            str[size++] = (char_t)(0x80 | ((codePoint1 & 0x3f)));
+        }
+        else if (codePoint1 <= 0xffff)
         {
-			str[size++] = (char_t)(0xe0 | ((codePoint1 >> 12) & 0xff));
-			str[size++] = (char_t)(0x80 | ((codePoint1 >> 6) & 0x3f));
-			str[size++] = (char_t)(0x80 | (codePoint1 & 0x3f));
-		}
-		else if (codePoint1 <= 0x10ffff)
+            str[size++] = (char_t)(0xe0 | ((codePoint1 >> 12) & 0xff));
+            str[size++] = (char_t)(0x80 | ((codePoint1 >> 6) & 0x3f));
+            str[size++] = (char_t)(0x80 | (codePoint1 & 0x3f));
+        }
+        else if (codePoint1 <= 0x10ffff)
         {			
             str[size++] = (char_t)(0xf0 | ((codePoint1 >> 18) & 0xff));
-			str[size++] = (char_t)(0x80 | ((codePoint1 >> 12) & 0x3f));
-			str[size++] = (char_t)(0x80 | ((codePoint1 >> 6) & 0x3f));
-			str[size++] = (char_t)(0x80 | (codePoint1 & 0x3f));
-		}
+            str[size++] = (char_t)(0x80 | ((codePoint1 >> 12) & 0x3f));
+            str[size++] = (char_t)(0x80 | ((codePoint1 >> 6) & 0x3f));
+            str[size++] = (char_t)(0x80 | (codePoint1 & 0x3f));
+        }
         else
         {
             ctx.setError(
