@@ -1,7 +1,7 @@
 JSonity
 =======
 
-JSonity is JSON utility for C++
+JSonity is JSON utility for C++ (header only)
 
 ## Features:
 * One header file only.
