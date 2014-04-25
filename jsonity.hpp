@@ -172,17 +172,17 @@ public:
 
         void destroy()
         {
-            if (getType() == StringType)
+            if (isString())
             {
                 delete data_.str_;
                 data_.str_ = NULL;
             }
-            else if (getType() == ArrayType)
+            else if (isArray())
             {
                 delete data_.arr_;
                 data_.arr_ = NULL;
             }
-            else if (getType() == ObjectType)
+            else if (isObject())
             {
                 delete data_.obj_;
                 data_.obj_ = NULL;
@@ -242,7 +242,8 @@ public:
         int64_t getNumber() const
         {
             JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
+                isNumber() || isReal() ||
+                isBoolean() || isString());
 
             if (isNumber())
             {
@@ -255,6 +256,14 @@ public:
             else if (isBoolean())
             {
                 return (getBoolean() ? 1 : 0);
+            }
+            else if (isString())
+            {
+                ISStream iss(getString());
+                int64_t number = 0;
+                iss >> number;
+                JSONITY_ASSERT(!iss.fail());
+                return number;
             }
 
             return 0;
@@ -296,7 +305,8 @@ public:
         double getReal() const
         {
             JSONITY_ASSERT(
-                isReal() || isNumber() || isBoolean());
+                isReal() || isNumber() ||
+                isBoolean() || isString());
 
             if (isReal())
             {
@@ -309,6 +319,14 @@ public:
             else if (isBoolean())
             {
                 return (getBoolean() ? 1.0 : 0.0);
+            }
+            else if (isString())
+            {
+                ISStream iss(getString());
+                double real;
+                iss >> real;
+                JSONITY_ASSERT(!iss.fail());
+                return real;
             }
 
             return 0;
@@ -542,19 +560,19 @@ public:
                 {
                     container.push_back(itObj->second);
                 }
-                else if (itObj->second.getType() == ArrayType)
+                else if (itObj->second.isArray())
                 {
                     for (typename std::vector<Value>::const_iterator itArr =
                             itObj->second.getArray().begin();
                         itArr != itObj->second.getArray().end(); ++itArr)
                     {
-                        if (itArr->getType() == ObjectType)
+                        if (itArr->isObject())
                         {
                             itArr->findRecursive(name, container);
                         }
                     }
                 }
-                else if (itObj->second.getType() == ObjectType)
+                else if (itObj->second.isObject())
                 {
                     itObj->second.findRecursive(name, container);
                 }
@@ -749,16 +767,18 @@ public:
                 return false;
             }
 
-            for (typename std::map<KeyType, ValueType>::const_iterator it =
-                    map.begin();
-                it != map.end(); ++it)
+            for (typename std::map<KeyType, ValueType>::
+                    const_iterator itOther = map.begin();
+                itOther != map.end(); ++itOther)
             {
                 OSStream oss;
-                oss << it->first;
+                oss << itOther->first;
 
-                if (!hasName(oss.str()) ||
-                    (!getObject().find(oss.str())->second.equal(
-                        it->second, ignoreOrder)))
+                typename std::map<Name, Value>::const_iterator it =
+                    getObject().find(oss.str());
+
+                if ((it == getObject().end()) ||
+                    !it->second.equal(itOther->second, ignoreOrder))
                 {
                     return false;
                 }
@@ -889,14 +909,16 @@ public:
         operator int32_t() const
         {
             JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
+                isNumber() || isReal() ||
+                isBoolean() || isString());
             return static_cast<int32_t>(getNumber());
         }
 
         operator int64_t() const
         {
             JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
+                isNumber() || isReal() ||
+                isBoolean() || isString());
             return getNumber();
         }
 
@@ -928,7 +950,8 @@ public:
         operator double() const
         {
             JSONITY_ASSERT(
-                isReal() || isNumber() || isBoolean());
+                isReal() || isNumber() ||
+                isBoolean() || isString());
             return getReal();
         }
 
@@ -1052,6 +1075,43 @@ public:
             return !operator==(value);
         }
 
+    public:
+        bool operator<(const Value& other) const
+        {
+            JSONITY_ASSERT(
+                other.isNumber() ||
+                other.isString() ||
+                other.isBoolean() ||
+                other.isReal());
+
+            JSONITY_ASSERT(
+                isNumber() ||
+                isString() ||
+                isBoolean() ||
+                isReal());
+
+            if (isString() && other.isString())
+            {
+                return (getString() < other.getString());
+            }
+            else if (isReal() && other.isReal())
+            {
+                return (getReal() < other.getReal());
+            }
+            else if (!isReal() && other.isReal())
+            {
+                return (getNumber() < other.getReal());
+            }
+            else if (isReal() && !other.isReal())
+            {
+                return (getReal() < other.getNumber());
+            }
+            else
+            {
+                return (getNumber() < other.getNumber());
+            }
+        }
+
     private:
 
         void assignNull()
@@ -1136,27 +1196,27 @@ public:
 
         void assignValue(const Value& value)
         {
-            if (value.getType() == NumberType)
+            if (value.isNumber())
             {
                 assignNumber(value.getNumber());
             }
-            else if (value.getType() == StringType)
+            else if (value.isString())
             {
                 assignString(value.getString().c_str());
             }
-            else if (value.getType() == BooleanType)
+            else if (value.isBoolean())
             {
                 assignBoolean(value.getBoolean());
             }
-            else if (value.getType() == RealType)
+            else if (value.isReal())
             {
                 assignReal(value.getReal());
             }
-            else if (value.getType() == ArrayType)
+            else if (value.isArray())
             {
                 assignArray(value.getArray());
             }
-            else if (value.getType() == ObjectType)
+            else if (value.isObject())
             {
                 assignObject(value.getObject());
             }
@@ -1185,7 +1245,7 @@ public:
 
     private:
         Type type_;
-		union Data {
+        union Data {
             int64_t n_;
             String* str_;
             bool b_;

@@ -700,6 +700,75 @@ void test8()
     }
 }
 
+void test9()
+{
+    {
+        Json::Value v = "123456";
+        int n = v;
+
+        JSONITY_ASSERT(n == 123456);
+    }
+
+    {
+        Json::Value v = "-123.456";
+        double d = v;
+
+        JSONITY_ASSERT(d == -123.456);
+    }
+
+    {
+        Json::Value v = true;
+        int n = v;
+
+        JSONITY_ASSERT(n == 1);
+    }
+}
+
+void test10()
+{
+    {
+        Json::Value v1 = 100;
+        Json::Value v2 = 200;
+
+        JSONITY_ASSERT(v1 < v2);
+    }
+
+    {
+        Json::Value v1 = 200.1;
+        Json::Value v2 = 200;
+
+        JSONITY_ASSERT(v2 < v1);
+    }
+
+    {
+        Json::Value v1 = true;
+        Json::Value v2 = false;
+
+        JSONITY_ASSERT(v2 < v1);
+    }
+
+    {
+        Json::Value v1 = -1.2;
+        Json::Value v2 = 1.0;
+
+        JSONITY_ASSERT(v1 < v2);
+    }
+
+    {
+        Json::Value v1 = "abcdefg";
+        Json::Value v2 = "hijklmn";
+
+        JSONITY_ASSERT(v1 < v2);
+    }
+
+    {
+        Json::Value v1 = "123";
+        Json::Value v2 = 124;
+
+        JSONITY_ASSERT(v1 < v2);
+    }
+}
+
 void example1()
 {
     std::string jsonStr1 = "{ \"name1\": 100, \"name2\": true, \"name3\": [10,20,30], \"name4\": \"data\" }";
@@ -906,6 +975,8 @@ int main(int, char**) {
     test6();
     test7();
     test8();
+    test9();
+    test10();
     example1();
     example2();
     example3();

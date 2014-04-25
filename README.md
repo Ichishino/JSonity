@@ -3,11 +3,11 @@ JSonity
 
 JSonity is JSON utility for C++
 
-## Features:
+## Features
 * One header file only.
 * Simple easy interface.
 
-## Examples:
+## Examples
 
 ```c++
 #include "jsonity.hpp"
