@@ -2114,6 +2114,57 @@ private:
         return true;
     }
 
+    static bool decodeEscapedChar(DecodeContext& ctx, Value& value)
+    {
+        if (ctx.getCurrentChar() == '"')
+        {
+            value.addChar('\"');
+        }
+        else if (ctx.getCurrentChar() == '\\')
+        {
+            value.addChar('\\');
+        }
+        else if (ctx.getCurrentChar() == '/')
+        {
+            value.addChar('/');
+        }
+        else if (ctx.getCurrentChar() == 'b')
+        {
+            value.addChar('\b');
+        }
+        else if (ctx.getCurrentChar() == 'f')
+        {
+            value.addChar('\f');
+        }
+        else if (ctx.getCurrentChar() == 'n')
+        {
+            value.addChar('\n');
+        }
+        else if (ctx.getCurrentChar() == 'r')
+        {
+            value.addChar('\r');
+        }
+        else if (ctx.getCurrentChar() == 't')
+        {
+            value.addChar('\t');
+        }
+        else if (ctx.getCurrentChar() == 'u')
+        {
+            return decodeCodePoint(ctx, value);
+        }
+        else
+        {
+            ctx.setError(
+                Error::StringProc, Error::UnexpectedEscapeToken,
+                __LINE__);
+            return false;
+        }
+
+        ctx.nextChar();
+
+        return true;
+    }
+
     static bool decodeString(DecodeContext& ctx, Value& value)
     {
         JSONITY_ASSERT(ctx.getCurrentChar() == '"');
@@ -2151,62 +2202,23 @@ private:
             }
             else
             {
-                if (ctx.getCurrentChar() == '"')
+                if (!decodeEscapedChar(ctx, value))
                 {
-                    value.addChar('\"');
-                }
-                else if (ctx.getCurrentChar() == '\\')
-                {
-                    value.addChar('\\');
-                }
-                else if (ctx.getCurrentChar() == '/')
-                {
-                    value.addChar('/');
-                }
-                else if (ctx.getCurrentChar() == 'b')
-                {
-                    value.addChar('\b');
-                }
-                else if (ctx.getCurrentChar() == 'f')
-                {
-                    value.addChar('\f');
-                }
-                else if (ctx.getCurrentChar() == 'n')
-                {
-                    value.addChar('\n');
-                }
-                else if (ctx.getCurrentChar() == 'r')
-                {
-                    value.addChar('\r');
-                }
-                else if (ctx.getCurrentChar() == 't')
-                {
-                    value.addChar('\t');
-                }
-                else if (ctx.getCurrentChar() == 'u')
-                {
-                    if (!decodeCodePoint(ctx, value))
-                    {
-                        return false;
-                    }
-                }
-                else
-                {
-                    ctx.setError(
-                        Error::StringProc, Error::UnexpectedEscapeToken,
-                        __LINE__);
                     return false;
                 }
 
                 escape = false;
-                ctx.nextChar();
                 head = ctx.getCurrentHead();
             }
         }
 
-        value.addString(head,
-            static_cast<size_t>(ctx.getCurrentHead() - head));
-        ctx.nextChar();
+        size_t size =
+            static_cast<size_t>(ctx.getCurrentHead() - head);
+        if (size > 0)
+        {
+            value.addString(head, size);
+            ctx.nextChar();
+        }
 
         return true;
     }
