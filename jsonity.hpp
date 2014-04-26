@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 0.0.1
+  JSonity : JSON Utility for C++   Version 0.0.2
 
   Copyright (c) 2014, Ichishino
 
@@ -2114,7 +2114,7 @@ private:
         return true;
     }
 
-    static bool decodeEscapedChar(DecodeContext& ctx, Value& value)
+    static bool decodeEscapeChar(DecodeContext& ctx, Value& value)
     {
         if (ctx.getCurrentChar() == '"')
         {
@@ -2202,7 +2202,7 @@ private:
             }
             else
             {
-                if (!decodeEscapedChar(ctx, value))
+                if (!decodeEscapeChar(ctx, value))
                 {
                     return false;
                 }
