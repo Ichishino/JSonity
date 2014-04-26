@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 0.0.2
+  JSonity : JSON Utility for C++   Version 0.0.3
 
   Copyright (c) 2014, Ichishino
 
@@ -2544,7 +2544,7 @@ public:
             {
                 escapePairCh = 't';
             }
-            else if ((ch < 0x20) || (ch == 0x7f))
+            else if (((uint32_t)ch < 0x20) || ((uint32_t)ch == 0x7f))
             {
                 escapePairCh = 'u';
             }
