@@ -21,7 +21,16 @@ using namespace jsonity;
 // example1
 
 std::string jsonStr1 =
-	"{ \"name1\": 100, \"name2\": true, \"name3\": [10,20,30], \"name4\": \"data\" }";
+    "{"
+        "\"name1\": 100,"
+        "\"name2\": true,"
+        "\"name3\": ["
+            "10,"
+            "20,"
+            "30"
+        "],"
+        "\"name4\": \"data\""
+    "}";
 
 Json::Value v;
 Json::decode(jsonStr1, v);   // parse
@@ -30,23 +39,52 @@ size_t size = v.getSize();  // 4
 
 bool check = v.hasName("name1");  // true
 
-int n = v["name1"];    // 100
-bool b = v["name2"];   // true
+int n1 = (int)v["name1"].getNumber(); // 100
+int n2 = v["name1"];                  // 100
+
+bool b1 = v["name2"].getBoolean(); // true
+bool b2 = v["name2"];              // true
+
+Json::Array& arr1 = v["name3"].getArray();
+Json::Array& arr2 = v["name3"];
 
 size_t array_size = v["name3"].getSize();  // 3
 
-int arr1 = v["name3"][0];   // 10
-int arr2 = v["name3"][1];   // 20
-int arr3 = v["name3"][2];   // 30
+int arr_n1 = arr1[0];   // 10
+int arr_n2 = arr1[1];   // 20
+int arr_n3 = arr1[2];   // 30
 
-const std::string& str = v["name4"];   // "data"
+const std::string& str1 = v["name4"].getString();   // "data"
+const std::string& str2 = v["name4"];               // "data"
+
+try
+{
+    b1 = v["name4"].getBoolean(); // exception
+}
+catch (const Json::TypeMismatchException&)
+{
+    // type mismatch
+}
 ```
 
 ```c++
 // example2
 
 std::string jsonStr2 =
-	"{ \"name1\": {\"data1\": [-3.14,\"aaaa\",true, { \"subdata1\": [600] }] } }";
+    "{"
+        "\"name1\": {"
+            "\"data1\": ["
+                "-3.14,"
+                "\"aaaa\","
+                "true,"
+                "{"
+                    "\"subdata1\": ["
+                        "600"
+                    "]"
+                "}"
+            "]"
+        "}"
+    "}";
 
 Json::Value v;
 Json::decode(jsonStr2, v);   // parse
@@ -93,7 +131,7 @@ std::string jsonStr;
 Json::encode(root_obj, jsonStr);  // serialize
 
 // jsonStr ==
-// 	{"name1":100,"name2":true,"name3":"data_string","name4":null,
+//  {"name1":100,"name2":true,"name3":"data_string","name4":null,
 //  "name5":["test",-400,false],"name6":{"xxx":-1.5,"yyy":true,"zzz":"test_test"},
 //  "name7":[444,777]}"
 ```
@@ -169,33 +207,29 @@ Json::encode(map, jsonStr2, &es2);  // serialize (for C++ Program)
 ```c++
 // example6
 
-std::string jsonStr = "{ \"aaa\": 100, \"bbb\": \"data\" }";
+std::string jsonStr =
+    "{"
+        "\"aaa\": 100,"
+        "\"bbb\": \"data\""
+    "}";
 
 Json::Value v;
 Json::decode(jsonStr, v);
 
-bool result = Json::equal(v, jsonStr);
-
-// result == true
+bool result = Json::equal(v, jsonStr);  // true
 ```
 
 ```c++
 // example7
 
-std::list<int> list;   // any STL type (map, vector, list, set, ...)
+std::list<int> list;
 list.push_back(100);
 list.push_back(200);
 list.push_back(300);
 
-bool result1 = Json::equal(list, "[ 100, 200, 300 ]");
+bool result1 = Json::equal(list, "[ 100, 200, 300 ]");  // true
 
-// result1 == true
+bool result2 = Json::equal(list, "[ 300, 100, 200 ]");  // true
 
-bool result2 = Json::equal(list, "[ 300, 100, 200 ]");
-
-// result2 == true
-
-bool result3 = Json::equal(list, "[ 300, 100, 200 ]", false);
-
-// result3 == false
+bool result3 = Json::equal(list, "[ 300, 100, 200 ]", false);  // false
 ```

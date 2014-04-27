@@ -163,15 +163,16 @@ void test2()
     JSONITY_ASSERT(v == 999);
     JSONITY_ASSERT(v == 999.0);
     JSONITY_ASSERT(v != 777);
-    JSONITY_ASSERT(v != true);
+    JSONITY_ASSERT(v == true);
     JSONITY_ASSERT(v != false);
-    JSONITY_ASSERT(v.getBoolean());
     JSONITY_ASSERT(v.getReal() == 999.0);
 
     v = 0;
+    JSONITY_ASSERT(v == 0);
     JSONITY_ASSERT(v == false);
     JSONITY_ASSERT(v != true);
     JSONITY_ASSERT(v == 0.0);
+    JSONITY_ASSERT(v != 100);
     JSONITY_ASSERT(!v.getBoolean());
 
     v = 1;
@@ -198,7 +199,7 @@ void test2()
     v = 1.23456;
     JSONITY_ASSERT(v == 1.23456);
     JSONITY_ASSERT(v != 100);
-    JSONITY_ASSERT(v != true);
+    JSONITY_ASSERT(v == true);
     JSONITY_ASSERT(v != false);
     JSONITY_ASSERT(v.getBoolean());
 
@@ -386,7 +387,7 @@ void test4()
     Json::Value v2;
     JSONITY_ASSERT(Json::decode(jstr1, v2));
 
-    JSONITY_ASSERT(v1.equal(v2));
+    JSONITY_ASSERT(v1.compare(v2) == 0);
     JSONITY_ASSERT(v1 == v2);
 
     Json::Value v3;
@@ -394,25 +395,25 @@ void test4()
     Json::encode(v1, s);
     JSONITY_ASSERT(Json::decode(s, v3));
 
-    JSONITY_ASSERT(v2.equal(v3));
+    JSONITY_ASSERT(v2.compare(v3) == 0);
     JSONITY_ASSERT(v2 == v3);
 }
 
 void test5()
 {
     Json::Object root;
-    root.insert("name1", Json::null());
-    root.insert("name2", 100);
-    root.insert("name3", "@@@@@@@@@@");
-    root.insert("name4", true);
-    root.insert("name5", false);
+    root["name1"] = Json::null();
+    root["name2"] = 100;
+    root["name3"] = "@@@@@@@@@@";
+    root["name4"] = true;
+    root["name5"] = false;
 
     std::vector<int> vec;
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
     vec.push_back(4);
-    root.insert("name6", vec);
+    root["name6"] = vec;
 
     std::list<std::string> list;
     list.push_back("test1");
@@ -423,7 +424,7 @@ void test5()
     obj["obj1"] = list;
     list.clear();
     obj["obj2"] = list;
-    root.insert("name7", obj);
+    root["name7"] = obj;
 
     Json::Array arr(5);
     arr[0] = 777;
@@ -431,7 +432,7 @@ void test5()
     arr[2] = true;
     arr[3] = 2.0;
     arr[4] = list;
-    root.insert("name8", arr);
+    root["name8"] = arr;
 
     Json::Value v;
     Json::String s;
@@ -456,8 +457,8 @@ void test6()
         vec.push_back(500);
         vec.push_back(70);
 
-        JSONITY_ASSERT(v.equal(vec, true));
-        JSONITY_ASSERT(v.equal(vec, false));
+        JSONITY_ASSERT(v.compare(vec, true) == 0);
+        JSONITY_ASSERT(v.compare(vec, false) == 0);
         JSONITY_ASSERT(v == vec);
 
         vec.clear();
@@ -465,8 +466,8 @@ void test6()
         vec.push_back(100);
         vec.push_back(500);
 
-        JSONITY_ASSERT(v.equal(vec, true));
-        JSONITY_ASSERT(!v.equal(vec, false));
+        JSONITY_ASSERT(v.compare(vec, true) == 0);
+        JSONITY_ASSERT(!v.compare(vec, false) == 0);
 
         // list
 
@@ -476,8 +477,8 @@ void test6()
         list.push_back(500);
         list.push_back(70);
 
-        JSONITY_ASSERT(v.equal(list, true));
-        JSONITY_ASSERT(v.equal(list, false));
+        JSONITY_ASSERT(v.compare(list, true) == 0);
+        JSONITY_ASSERT(v.compare(list, false) == 0);
         JSONITY_ASSERT(v == list);
 
         list.clear();
@@ -485,8 +486,8 @@ void test6()
         list.push_back(100);
         list.push_back(500);
 
-        JSONITY_ASSERT(v.equal(list, true));
-        JSONITY_ASSERT(!v.equal(list, false));
+        JSONITY_ASSERT(v.compare(list, true) == 0);
+        JSONITY_ASSERT(!v.compare(list, false) == 0);
     }
 
     {
@@ -500,7 +501,7 @@ void test6()
         map["aaa"] = "data1";
         map["bbb"] = "data2";
 
-        JSONITY_ASSERT(v.equal(map));
+        JSONITY_ASSERT(v.compare(map) == 0);
         JSONITY_ASSERT(v == map);
     }
 
@@ -524,7 +525,7 @@ void test6()
         map["ccc"] = list;
         map["ddd"] = true;
 
-        JSONITY_ASSERT(v.equal(map));
+        JSONITY_ASSERT(v.compare(map) == 0);
         JSONITY_ASSERT(v == map);
     }
 }
@@ -703,24 +704,49 @@ void test8()
 void test9()
 {
     {
+        Json::Value v = true;
+        int64_t n = v;
+
+        JSONITY_ASSERT(n == 1);
+    }
+
+    {
         Json::Value v = "123456";
-        int n = v;
+        int64_t n = v.toNumber();
 
         JSONITY_ASSERT(n == 123456);
     }
 
     {
-        Json::Value v = "-123.456";
-        double d = v;
+        Json::Value v = -123.777;
+        int64_t n = v.toNumber();
 
-        JSONITY_ASSERT(d == -123.456);
+        JSONITY_ASSERT(n == -123);
+    }
+
+    {
+        Json::Value v = -123.777;
+        std::string s = v.toString();
+
+        JSONITY_ASSERT(s == "-123.777");
     }
 
     {
         Json::Value v = true;
-        int n = v;
 
+        int64_t n = v;
         JSONITY_ASSERT(n == 1);
+
+        std::string s = v.toString();
+        JSONITY_ASSERT(s == "1");
+
+        v = false;
+
+        n = v;
+        JSONITY_ASSERT(n == 0);
+
+        s = v.toString();
+        JSONITY_ASSERT(s == "0");
     }
 }
 
@@ -731,6 +757,7 @@ void test10()
         Json::Value v2 = 200;
 
         JSONITY_ASSERT(v1 < v2);
+        JSONITY_ASSERT(v1 < 300);
     }
 
     {
@@ -738,6 +765,7 @@ void test10()
         Json::Value v2 = 200;
 
         JSONITY_ASSERT(v2 < v1);
+        JSONITY_ASSERT(v2 < 200.1);
     }
 
     {
@@ -745,6 +773,7 @@ void test10()
         Json::Value v2 = false;
 
         JSONITY_ASSERT(v2 < v1);
+        JSONITY_ASSERT(v2 < true);
     }
 
     {
@@ -752,6 +781,7 @@ void test10()
         Json::Value v2 = 1.0;
 
         JSONITY_ASSERT(v1 < v2);
+        JSONITY_ASSERT(v1 < 2);
     }
 
     {
@@ -760,61 +790,237 @@ void test10()
 
         JSONITY_ASSERT(v1 < v2);
     }
+}
+
+void test11()
+{
+    {
+        Json::Value v = "test";
+
+        for (;;)
+        {
+            try
+            {
+                v.getNumber();
+            }
+            catch (const Json::TypeMismatchException& e)
+            {
+                printf("%s(%d)\n", e.what(), e.getCodeLine());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
+
+        for (;;)
+        {
+            try
+            {
+                v.getBoolean();
+            }
+            catch (const Json::TypeMismatchException& e)
+            {
+                printf("%s(%d)\n", e.what(), e.getCodeLine());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
+
+        for (;;)
+        {
+            try
+            {
+                v.getReal();
+            }
+            catch (const Json::TypeMismatchException& e)
+            {
+                printf("%s(%d)\n", e.what(), e.getCodeLine());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
+
+        for (;;)
+        {
+            try
+            {
+                v.getObject();
+            }
+            catch (const Json::TypeMismatchException& e)
+            {
+                printf("%s(%d)\n", e.what(), e.getCodeLine());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
+
+        for (;;)
+        {
+            try
+            {
+                v.getArray();
+            }
+            catch (const Json::TypeMismatchException& e)
+            {
+                printf("%s(%d)\n", e.what(), e.getCodeLine());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
+    }
 
     {
-        Json::Value v1 = "123";
-        Json::Value v2 = 124;
+        Json::Value v = 100;
 
-        JSONITY_ASSERT(v1 < v2);
+        for (;;)
+        {
+            try
+            {
+                v.getString();
+            }
+            catch (const Json::TypeMismatchException& e)
+            {
+                printf("%s(%d)\n", e.what(), e.getCodeLine());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
+
+        for (;;)
+        {
+            try
+            {
+                v.getObject();
+            }
+            catch (const Json::TypeMismatchException& e)
+            {
+                printf("%s(%d)\n", e.what(), e.getCodeLine());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
+
+        for (;;)
+        {
+            try
+            {
+                v.getArray();
+            }
+            catch (const Json::TypeMismatchException& e)
+            {
+                printf("%s(%d)\n", e.what(), e.getCodeLine());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
     }
 }
 
 void example1()
 {
-    std::string jsonStr1 = "{ \"name1\": 100, \"name2\": true, \"name3\": [10,20,30], \"name4\": \"data\" }";
+    std::string jsonStr1 =
+        "{"
+            "\"name1\": 100,"
+            "\"name2\": true,"
+            "\"name3\": ["
+                "10,"
+                "20,"
+                "30"
+            "],"
+            "\"name4\": \"data\""
+        "}";
 
     Json::Value v;
-    Json::decode(jsonStr1, v);
+    Json::decode(jsonStr1, v);   // parse
 
-    size_t size = v.getSize();
+    size_t size = v.getSize();  // 4
 
-    bool check = v.hasName("name1");
+    bool check = v.hasName("name1");  // true
 
-    int n = v["name1"];
-    bool b = v["name2"];
+    int n1 = (int)v["name1"].getNumber(); // 100
+    int n2 = v["name1"];                  // 100
 
-    size_t array_size = v["name3"].getSize();
+    bool b1 = v["name2"].getBoolean(); // true
+    bool b2 = v["name2"];              // true
 
-    int arr1 = v["name3"][0];
-    int arr2 = v["name3"][1];
-    int arr3 = v["name3"][2];
+    Json::Array& arr1 = v["name3"].getArray();
+    Json::Array& arr2 = v["name3"];
 
-    const std::string& str = v["name4"];
+    size_t array_size = v["name3"].getSize();  // 3
+
+    int arr_n1 = arr1[0];   // 10
+    int arr_n2 = arr1[1];   // 20
+    int arr_n3 = arr1[2];   // 30
+
+    const std::string& str1 = v["name4"].getString();   // "data"
+    const std::string& str2 = v["name4"];               // "data"
+
+    try
+    {
+        b1 = v["name4"].getBoolean(); // exception
+    }
+    catch (const Json::TypeMismatchException&)
+    {
+        // type mismatch
+    }
 
     JSONITY_ASSERT(check == true);
     JSONITY_ASSERT(size == 4);
     JSONITY_ASSERT(array_size == 3);
-    JSONITY_ASSERT(n == 100);
-    JSONITY_ASSERT(b == true);
-    JSONITY_ASSERT(arr1 == 10);
-    JSONITY_ASSERT(arr2 == 20);
-    JSONITY_ASSERT(arr3 == 30);
-    JSONITY_ASSERT(str == "data");
+    JSONITY_ASSERT(n1 == 100);
+    JSONITY_ASSERT(n2 == 100);
+    JSONITY_ASSERT(b1 == true);
+    JSONITY_ASSERT(b2 == true);
+    JSONITY_ASSERT(arr_n1 == 10);
+    JSONITY_ASSERT(arr_n2 == 20);
+    JSONITY_ASSERT(arr_n3 == 30);
+    JSONITY_ASSERT(str1 == "data");
+    JSONITY_ASSERT(str2 == "data");
+    JSONITY_ASSERT(arr1 == arr2);
 
     return;
 }
 
 void example2()
 {
-    std::string jsonStr2 = "{ \"name1\": {\"data1\": [-3.14,\"aaaa\",true, { \"subdata1\": [600] }] } }";
+    std::string jsonStr2 =
+        "{"
+            "\"name1\": {"
+                "\"data1\": ["
+                    "-3.14,"
+                    "\"aaaa\","
+                    "true,"
+                    "{"
+                        "\"subdata1\": ["
+                            "600"
+                        "]"
+                    "}"
+                "]"
+            "}"
+        "}";
 
     Json::Value v;
-    Json::decode(jsonStr2, v);
+    Json::decode(jsonStr2, v);   // parse
 
-    double d = v["name1"]["data1"][0];
-    std::string& str = v["name1"]["data1"][1];
-    bool b = v["name1"]["data1"][2];
-    int n = v["name1"]["data1"][3]["subdata1"][0];
+    double d = v["name1"]["data1"][0];    // -3.14
+    const std::string& str = v["name1"]["data1"][1]; // "aaaa"
+    bool b = v["name1"]["data1"][2];      // "true"
+    int n = v["name1"]["data1"][3]["subdata1"][0];  // 600
 
     JSONITY_ASSERT(d == -3.14);
     JSONITY_ASSERT(str == "aaaa");
@@ -847,24 +1053,26 @@ void example3()
 
     root_obj["name6"] = obj;
 
-    std::list<int> list;
+    std::list<int> list;  // any STL type (map, vector, list, set, ...)
     list.push_back(444);
     list.push_back(777);
 
     root_obj["name7"] = list;
 
     std::string jsonStr;
-    Json::encode(root_obj, jsonStr);
+    Json::encode(root_obj, jsonStr);  // serialize
 
-    // jsonStr == jsonStr == {"name1":100,"name2":true,"name3":"data_string","name4":null,
-    //     "name5":["test",-400,false],"name6":{"xxx":-1.5,"yyy":true,"zzz":"test_test"},"name7":[444,777]}
+    // jsonStr ==
+    //  {"name1":100,"name2":true,"name3":"data_string","name4":null,
+    //  "name5":["test",-400,false],"name6":{"xxx":-1.5,"yyy":true,"zzz":"test_test"},
+    //  "name7":[444,777]}"
 
     return;
 }
 
 void example4()
 {
-    std::map<std::string, std::list<std::string> > map;
+    std::map<std::string, std::list<std::string> > map;  // any STL type (map, vector, list, set, ...)
 
     std::list<std::string> list;
     list.push_back("vvv");
@@ -874,9 +1082,9 @@ void example4()
     map["name"] = list;
 
     std::string jsonStr;
-    Json::encode(map, jsonStr);
+    Json::encode(map, jsonStr);  // serialize
 
-    // jsonStr == "{"name\":["vvv","www","xxx"]}"
+    // jsonStr == {"name":["vvv","www","xxx"]}
 
     return;
 }
@@ -896,7 +1104,7 @@ void example5()
     es1.setStandardStyle();
 
     std::string jsonStr1;
-    Json::encode(map, jsonStr1, &es1);
+    Json::encode(map, jsonStr1, &es1);  // serialize (Human Readable)
 
     /* jsonStr1 ==
         {
@@ -915,7 +1123,7 @@ void example5()
     es2.setNewLine(true, false);
 
     std::string jsonStr2;
-    Json::encode(map, jsonStr2, &es2);
+    Json::encode(map, jsonStr2, &es2);  // serialize (for C++ Program)
 
     /* jsonStr2 ==
         "{\n"
@@ -932,12 +1140,16 @@ void example5()
 
 void example6()
 {
-    std::string jsonStr = "{ \"aaa\": 100, \"bbb\": \"data\" }";
+    std::string jsonStr =
+        "{"
+            "\"aaa\": 100,"
+            "\"bbb\": \"data\""
+        "}";
 
     Json::Value v;
     Json::decode(jsonStr, v);
 
-    bool result = Json::equal(v, jsonStr);
+    bool result = Json::equal(v, jsonStr);  // true
 
     JSONITY_ASSERT(result);
 }
@@ -949,17 +1161,16 @@ void example7()
     list.push_back(200);
     list.push_back(300);
 
-    bool result1 = Json::equal(list, "[ 100, 200, 300 ]");
+    bool result1 = Json::equal(list, "[ 100, 200, 300 ]");  // true
     
-    bool result2 = Json::equal(list, "[ 300, 100, 200 ]");
+    bool result2 = Json::equal(list, "[ 300, 100, 200 ]");  // true
 
-    bool result3 = Json::equal(list, "[ 300, 100, 200 ]", false);
+    bool result3 = Json::equal(list, "[ 300, 100, 200 ]", false);  // false
 
     JSONITY_ASSERT(result1);
     JSONITY_ASSERT(result2);
     JSONITY_ASSERT(!result3);
 }
-
 #ifdef WIN32
 int _tmain(int, _TCHAR**) {
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -977,6 +1188,7 @@ int main(int, char**) {
     test8();
     test9();
     test10();
+    test11();
     example1();
     example2();
     example3();
@@ -987,3 +1199,4 @@ int main(int, char**) {
 
     return 0;
 }
+

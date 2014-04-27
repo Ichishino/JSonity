@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 0.0.3
+  JSonity : JSON Utility for C++   Version 0.1.0
 
   Copyright (c) 2014, Ichishino
 
@@ -52,6 +52,12 @@ typedef __int64 int64_t;
 #define JSONITY_ASSERT
 #endif
 
+#define JSONITY_THROW_TYPE_MISMATCH() \
+    (throw TypeMismatchException(__LINE__))
+
+#define JSONITY_TYPE_CHECK(exp) \
+    { if (!exp) JSONITY_THROW_TYPE_MISMATCH(); }
+
 #ifdef _MSC_VER
 #pragma warning (disable : 4503) // Disable truncated name warning
 #endif
@@ -74,6 +80,14 @@ public:
     // Name
     typedef String Name;
 
+    class Value;
+
+    // Array
+    typedef std::vector<Value> Array;
+
+    // Object
+    typedef std::map<Name, Value> Object;
+
     typedef std::basic_istringstream<
         char_t, std::char_traits<char_t>,
         std::allocator<char_t> > ISStream;
@@ -86,9 +100,6 @@ public:
     //-----------------------------------------------------------------------//
     // JsonBase::Value
     //-----------------------------------------------------------------------//
-
-    class Array;
-    class Object;
 
     class Value
     {
@@ -137,32 +148,22 @@ public:
             assignReal(real);
         }
 
-        Value(const Value& other)
-        {
-            type_ = NullType;
-            assignValue(other);
-        }
-
-        Value(const Array& arr)
-        {
-            assignArray(arr.getArray());
-        }
-
         template<typename ContainerType>
         Value(const ContainerType& container)
         {
             assignArray(container);
         }
 
-        Value(const Object& obj)
-        {
-            assignObject(obj.getObject());
-        }
-
         template<typename KeyType, typename ValueType>
         Value(const std::map<KeyType, ValueType>& map)
         {
             assignObject(map);
+        }
+
+        Value(const Value& other)
+        {
+            type_ = NullType;
+            assignValue(other);
         }
 
         ~Value()
@@ -241,10 +242,6 @@ public:
 
         int64_t getNumber() const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() ||
-                isBoolean() || isString());
-
             if (isNumber())
             {
                 return data_.n_;
@@ -257,57 +254,46 @@ public:
             {
                 return (getBoolean() ? 1 : 0);
             }
-            else if (isString())
+            else
             {
-                ISStream iss(getString());
-                int64_t number = 0;
-                iss >> number;
-                JSONITY_ASSERT(!iss.fail());
-                return number;
+                JSONITY_THROW_TYPE_MISMATCH();
             }
-
-            return 0;
         }
 
         String& getString()
         {
-            JSONITY_ASSERT(isString());
+            JSONITY_TYPE_CHECK(isString());
             return *data_.str_;
         }
 
         const String& getString() const
         {
-            JSONITY_ASSERT(isString());
+            JSONITY_TYPE_CHECK(isString());
             return *data_.str_;
         }
 
         bool getBoolean() const
         {
-            JSONITY_ASSERT(
-                isBoolean() || isNumber() || isReal());
-            
             if (isBoolean())
             {
                 return data_.b_;
             }
             else if (isNumber())
             {
-                return !(getNumber() == 0);
+                return (getNumber() != 0);
             }
             else if (isReal())
             {
-                return !(getReal() == 0.0);
+                return (getReal() != 0.0);
             }
-
-            return false;
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
         }
 
         double getReal() const
         {
-            JSONITY_ASSERT(
-                isReal() || isNumber() ||
-                isBoolean() || isString());
-
             if (isReal())
             {
                 return data_.d_;
@@ -320,39 +306,33 @@ public:
             {
                 return (getBoolean() ? 1.0 : 0.0);
             }
-            else if (isString())
+            else
             {
-                ISStream iss(getString());
-                double real;
-                iss >> real;
-                JSONITY_ASSERT(!iss.fail());
-                return real;
+                JSONITY_THROW_TYPE_MISMATCH();
             }
-
-            return 0;
         }
 
-        std::vector<Value>& getArray()
+        Array& getArray()
         {
-            JSONITY_ASSERT(isArray());
+            JSONITY_TYPE_CHECK(isArray());
             return *data_.arr_;
         }
 
-        const std::vector<Value>& getArray() const
+        const Array& getArray() const
         {
-            JSONITY_ASSERT(isArray());
+            JSONITY_TYPE_CHECK(isArray());
             return *data_.arr_;
         }
 
-        std::map<Name, Value>& getObject()
+        Object& getObject()
         {
-            JSONITY_ASSERT(isObject());
+            JSONITY_TYPE_CHECK(isObject());
             return *data_.obj_;
         }
 
-        const std::map<Name, Value>& getObject() const
+        const Object& getObject() const
         {
-            JSONITY_ASSERT(isObject());
+            JSONITY_TYPE_CHECK(isObject());
             return *data_.obj_;
         }
 
@@ -494,10 +474,64 @@ public:
             {
                 return getString().size();
             }
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
+        }
 
-            JSONITY_ASSERT(false);
+public:
 
-            return 0;
+        // Convert
+
+        int64_t toNumber() const
+        {
+            if (isString())
+            {
+                ISStream iss(getString());
+                int64_t number = 0;
+                iss >> number;
+                JSONITY_TYPE_CHECK(!iss.fail());
+                return number;
+            }
+            else if (isNumber() || isReal() || isBoolean())
+            {
+                return getNumber();
+            }
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
+        }
+
+        String toString() const
+        {
+            if (isNumber())
+            {
+                OSStream oss;
+                oss << getNumber();
+                return oss.str();
+            }
+            else if (isReal())
+            {
+                OSStream oss;
+                oss << getReal();
+                return oss.str();
+            }
+            else if (isBoolean())
+            {
+                OSStream oss;
+                oss << getBoolean();
+                return oss.str();
+            }
+            else if (isString())
+            {
+                return getString();
+            }
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
         }
 
     public:
@@ -506,7 +540,7 @@ public:
         
         Value& operator[](int index)
         {
-            JSONITY_ASSERT(isArray());
+            JSONITY_TYPE_CHECK(isArray());
             JSONITY_ASSERT(index >= 0);
             JSONITY_ASSERT(getSize() > static_cast<size_t>(index));
         
@@ -515,7 +549,7 @@ public:
 
         Value& addNewValue()
         {
-            JSONITY_ASSERT(isArray());
+            JSONITY_TYPE_CHECK(isArray());
 
             getArray().push_back(Value());
             return getArray().back();
@@ -527,15 +561,15 @@ public:
 
         bool hasName(const String& name) const
         {
-            JSONITY_ASSERT(isObject());
+            JSONITY_TYPE_CHECK(isObject());
             return (getObject().find(name) != getObject().end());
         }
 
         bool find(const String& name, Value& value) const
         {
-            JSONITY_ASSERT(isObject());
+            JSONITY_TYPE_CHECK(isObject());
 
-            typename std::map<Name, Value>::const_iterator it =
+            typename Object::const_iterator it =
                 getObject().find(name);
             if (it != getObject().end())
             {
@@ -550,9 +584,9 @@ public:
         size_t findRecursive(const String& name,
                              ContainerType& container) const
         {
-            JSONITY_ASSERT(isObject());
+            JSONITY_TYPE_CHECK(isObject());
 
-            for (typename std::map<Name, Value>::const_iterator itObj =
+            for (typename Object::const_iterator itObj =
                     getObject().begin();
                 itObj != getObject().end(); ++itObj)
             {
@@ -562,7 +596,7 @@ public:
                 }
                 else if (itObj->second.isArray())
                 {
-                    for (typename std::vector<Value>::const_iterator itArr =
+                    for (typename Array::const_iterator itArr =
                             itObj->second.getArray().begin();
                         itArr != itObj->second.getArray().end(); ++itArr)
                     {
@@ -583,132 +617,128 @@ public:
 
         Value& operator[](const char_t* name)
         {
-            JSONITY_ASSERT(isObject());
+            JSONITY_TYPE_CHECK(isObject());
             return getObject()[name];
         }
 
         Value& operator[](const Name& name)
         {
-            JSONITY_ASSERT(isObject());
+            JSONITY_TYPE_CHECK(isObject());
             return getObject()[name];
-        }
-
-        void insert(const Name& name, const Value& value)
-        {
-            JSONITY_ASSERT(isObject());
-
-            getObject().insert(
-                typename std::map<Name, Value>::value_type(
-                    name, value));
         }
 
     public:
 
-        // Equal
+        // Compare
 
-        bool equal(int32_t number, bool ignoreOrder = true) const
+        int64_t compare(int32_t number,
+                        bool ignoreOrder = true) const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
             ((void)ignoreOrder);
 
-            if (isNumber() || isReal())
+            if (isNumber() || isBoolean())
             {
-                return (getNumber() == number);
-            }
-            else if (isBoolean())
-            {
-                return (getBoolean() ?
-                    (number == 1) : (number == 0));
-            }
-
-            return false;
-        }
-
-        bool equal(int64_t number, bool ignoreOrder = true) const
-        {
-            JSONITY_ASSERT(isNumber() || isReal() || isBoolean());
-            ((void)ignoreOrder);
-
-            if (isNumber() || isReal())
-            {
-                return (getNumber() == number);
-            }
-            else if (isBoolean())
-            {
-                return (getBoolean() ?
-                    (number == 1) : (number == 0));
-            }
-
-            return false;
-        }
-
-        bool equal(const char_t* str, bool ignoreOrder = true) const
-        {
-            JSONITY_ASSERT(isString());
-            ((void)ignoreOrder);
-            return (getString().compare(str) == 0);
-        }
-
-        bool equal(const String& str, bool ignoreOrder = true) const
-        {
-            JSONITY_ASSERT(isString());
-            ((void)ignoreOrder);
-            return (getString().compare(str) == 0);
-        }
-
-        bool equal(bool boolean, bool ignoreOrder = true) const
-        {
-            JSONITY_ASSERT(
-                isBoolean() || isNumber() || isReal());
-            ((void)ignoreOrder);
-
-            if (isBoolean())
-            {
-                return (getBoolean() == boolean);
-            }
-            else if (isNumber())
-            {
-                return (((getNumber() == 1) && boolean) ||
-                        ((getNumber() == 0) && !boolean));
+                return (getNumber() - number);
             }
             else if (isReal())
             {
-                return (((getReal() == 1.0) && boolean) ||
-                        ((getReal() == 0.0) && !boolean));
+                return compare((double)number);
             }
-
-            return false;
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
         }
 
-        bool equal(double real, bool ignoreOrder = true) const
+        int64_t compare(int64_t number,
+                        bool ignoreOrder = true) const
         {
-            JSONITY_ASSERT(
-                isReal() || isNumber() || isBoolean());
             ((void)ignoreOrder);
 
-            if (isReal() || isNumber())
+            if (isNumber() || isBoolean())
             {
-                return (getReal() == real);
+                return (getNumber() - number);
             }
-            else if (isBoolean())
+            else if (isReal())
             {
-                return (getBoolean() ?
-                    (real == 1.0) : (real == 0.0));
+                return compare((double)number);
             }
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
+        }
 
-            return false;
+        int64_t compare(const char_t* str,
+                        bool ignoreOrder = true) const
+        {
+            JSONITY_TYPE_CHECK(isString());
+            ((void)ignoreOrder);
+            return getString().compare(str);
+        }
+
+        int64_t compare(const String& str,
+                        bool ignoreOrder = true) const
+        {
+            JSONITY_TYPE_CHECK(isString());
+            ((void)ignoreOrder);
+            return getString().compare(str);
+        }
+
+        int64_t compare(bool boolean,
+                        bool ignoreOrder = true) const
+        {
+            ((void)ignoreOrder);
+
+            if (isBoolean() || isNumber() || isReal())
+            {
+                return (getBoolean() - boolean);
+            }
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
+        }
+
+        int64_t compare(double real,
+                        bool ignoreOrder = true) const
+        {
+            ((void)ignoreOrder);
+
+            if (isReal() || isNumber() || isBoolean())
+            {
+                if (getReal() < real)
+                {
+                    return -1;
+                }
+                else if (getReal() > real)
+                {
+                    return 1;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
         }
 
         template<typename ConatainerType>
-        bool equal(const ConatainerType& container,
-                   bool ignoreOrder = true) const
+        int64_t compare(const ConatainerType& container,
+                        bool ignoreOrder = true) const
         {
-            JSONITY_ASSERT(isArray());
+            JSONITY_TYPE_CHECK(isArray());
 
-            if (getSize() != container.size())
+            if (getSize() < container.size())
             {
-                return false;
+                return -1;
+            }
+            else if (getSize() > container.size())
+            {
+                return 1;
             }
    
             typename ConatainerType::const_iterator itOther =
@@ -716,23 +746,24 @@ public:
 
             if (ignoreOrder)
             {
-                std::vector<Value> arr = getArray();
+                Array arr = getArray(); // copy
 
                 for (; itOther != container.end(); ++itOther)
                 {
-                    typename std::vector<Value>::iterator itArr =
+                    typename Array::iterator itArr =
                         arr.begin();
 
                     for (; itArr != arr.end(); ++itArr)
                     {
-                        if (itArr->equal(*itOther, ignoreOrder))
+                        if (itArr->compare(*itOther, ignoreOrder) == 0)
                         {
                             break;
                         }
                     }
+
                     if (itArr == arr.end())
                     {
-                        return false;
+                        return -1;
                     }
 
                     arr.erase(itArr);
@@ -740,31 +771,36 @@ public:
             }
             else
             {
-                typename std::vector<Value>::const_iterator itArr =
+                typename Array::const_iterator itArr =
                     getArray().begin(); 
 
                 for (; itOther != container.end(); ++itOther)
                 {
-                    if (*itArr != *itOther)
+                    int64_t result = itArr->compare(*itOther, ignoreOrder);
+                    if (result != 0)
                     {
-                        return false;
+                        return result;
                     }
                     ++itArr;
                 }
             }
 
-            return true;
+            return 0;
         }
 
         template<typename KeyType, typename ValueType>
-        bool equal(const std::map<KeyType, ValueType>& map,
-                   bool ignoreOrder = true) const
+        int64_t compare(const std::map<KeyType, ValueType>& map,
+                        bool ignoreOrder = true) const
         {
-            JSONITY_ASSERT(isObject());
+            JSONITY_TYPE_CHECK(isObject());
 
-            if (getSize() != map.size())
+            if (getSize() < map.size())
             {
-                return false;
+                return -static_cast<int64_t>(map.size() - getSize());
+            }
+            else if (getSize() > map.size())
+            {
+                return static_cast<int64_t>(getSize() - map.size());
             }
 
             for (typename std::map<KeyType, ValueType>::
@@ -774,60 +810,67 @@ public:
                 OSStream oss;
                 oss << itOther->first;
 
-                typename std::map<Name, Value>::const_iterator it =
+                typename Object::const_iterator it =
                     getObject().find(oss.str());
 
-                if ((it == getObject().end()) ||
-                    !it->second.equal(itOther->second, ignoreOrder))
+                if (it == getObject().end())
                 {
-                    return false;
+                    return -1;
+                }
+
+                int64_t result =
+                    it->second.compare(itOther->second, ignoreOrder);
+                if (result != 0)
+                {
+                    return result;
                 }
             }
 
-            return true;
+            return 0;
         }
 
-        bool equal(const Value& value, bool ignoreOrder = true) const
+        int64_t compare(const Value& value,
+                        bool ignoreOrder = true) const
         {
             if (isNull() && value.isNull())
             {
-                return true;
+                return 0;
             }
-            else if (isNumber() && value.isNumber())
+            else if (isNumber() &&
+                (value.isNumber() || value.isBoolean()))
             {
-                return equal(value.getNumber());
+                return compare(value.getNumber());
             }
             else if (isNumber() && value.isReal())
             {
-                return equal(
-                    static_cast<int64_t>(value.getReal()));
+                return compare(value.getReal());
             }
             else if (isString() && value.isString())
             {
-                return equal(value.getString());
+                return compare(value.getString());
             }
-            else if (isBoolean() && value.isBoolean())
+            else if (isBoolean() &&
+                (value.isBoolean() || value.isNumber() || value.isReal()))
             {
-                return equal(value.getBoolean());
+                return compare(value.getBoolean());
             }
-            else if (isReal() && value.isReal())
+            else if (isReal() &&
+                (value.isReal() || value.isNumber() || value.isBoolean()))
             {
-                return equal(value.getReal());
-            }
-            else if (isReal() && value.isNumber())
-            {
-                return equal(value.getNumber());
+                return compare(value.getReal());
             }
             else if (isArray() && value.isArray())
             {
-                return equal(value.getArray(), ignoreOrder);
+                return compare(value.getArray(), ignoreOrder);
             }
             else if (isObject() && value.isObject())
             {
-                return equal(value.getObject(), ignoreOrder);
+                return compare(value.getObject(), ignoreOrder);
             }
-
-            return false;
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
         }
 
     public:
@@ -870,22 +913,10 @@ public:
             return *this;
         }
 
-        Value& operator=(const Array& arr)
-        {
-            setArray(arr.getArray());
-            return *this;
-        }
-
         template<typename ContainerType>
         Value& operator=(const ContainerType& container)
         {
             setArray(container);
-            return *this;
-        }
-
-        Value& operator=(const Object& obj)
-        {
-            setObject(obj.getObject());
             return *this;
         }
 
@@ -908,166 +939,135 @@ public:
 
         operator int32_t() const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() ||
-                isBoolean() || isString());
             return static_cast<int32_t>(getNumber());
         }
 
         operator int64_t() const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() ||
-                isBoolean() || isString());
             return getNumber();
         }
 
         operator const char_t*() const
         {
-            JSONITY_ASSERT(isString());
             return getString().c_str();
         }
 
         operator String&()
         {
-            JSONITY_ASSERT(isString());
-            return getString();
-        }
-
-        operator const String&() const
-        {
-            JSONITY_ASSERT(isString());
             return getString();
         }
 
         operator bool() const
         {
-            JSONITY_ASSERT(
-                isBoolean() || isNumber() || isReal());            
             return getBoolean();
         }
 
         operator double() const
         {
-            JSONITY_ASSERT(
-                isReal() || isNumber() ||
-                isBoolean() || isString());
             return getReal();
+        }
+
+        operator Array&()
+        {
+            return getArray();
+        }
+
+        operator Object&()
+        {
+            return getArray();
         }
 
     public:
 
-        // Equal operator
-
         bool operator==(int32_t number) const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
-            return equal(number);
+            return (compare(number) == 0);
         }
 
         bool operator==(int64_t number) const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
-            return equal(number);
+            return (compare(number) == 0);
         }
 
         bool operator==(const char_t* str) const
         {
-            JSONITY_ASSERT(isString());
-            return equal(str);
+            return (compare(str) == 0);
         }
 
         bool operator==(const String& str) const
         {
-            JSONITY_ASSERT(isString());
-            return equal(str);
+            return (compare(str) == 0);
         }
 
         bool operator==(bool boolean) const
         {
-            JSONITY_ASSERT(
-                isBoolean() || isNumber() || isReal());
-            return equal(boolean);
+            return (compare(boolean) == 0);
         }
 
         bool operator==(double real) const
         {
-            JSONITY_ASSERT(
-                isReal() || isNumber() || isBoolean());
-            return equal(real);
+            return (compare(real) == 0);
         }
 
-        bool operator==(const std::vector<Value>& arr) const
+        template<typename ContainerType>
+        bool operator==(const ContainerType& container) const
         {
-            JSONITY_ASSERT(isArray());
-            return equal(arr);
+            return (compare(container) == 0);
         }
 
-        bool operator==(const std::map<Name, Value>& obj) const
+        template<typename KetType, typename ValueType>
+        bool operator==(const std::map<KetType, ValueType>& map) const
         {
-            JSONITY_ASSERT(isObject());
-            return equal(obj);
+            return (compare(map) == 0);
         }
 
         bool operator==(const Value& value) const
         {
-            return equal(value);
+            return (compare(value) == 0);
         }
 
-        // not equal
+    public:
 
         bool operator!=(int32_t number) const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
             return !operator==(number);
         }
 
         bool operator!=(int64_t number) const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
             return !operator==(number);
         }
 
         bool operator!=(const char_t* str) const
         {
-            JSONITY_ASSERT(isString());
             return !operator==(str);
         }
 
         bool operator!=(const String& str) const
         {
-            JSONITY_ASSERT(isString());
             return !operator==(str);
         }
 
         bool operator!=(bool boolean) const
         {
-            JSONITY_ASSERT(
-                isBoolean() || isNumber() || isReal());
             return !operator==(boolean);
         }
 
         bool operator!=(double real) const
         {
-            JSONITY_ASSERT(
-                isNumber() || isReal() || isBoolean());
             return !operator==(real);
         }
 
-        bool operator!=(const std::vector<Value>& arr) const
+        template<typename ContainerType>
+        bool operator!=(const ContainerType& container) const
         {
-            JSONITY_ASSERT(isArray());
-            return !operator==(arr);
+            return !operator==(container);
         }
 
-        bool operator!=(const std::map<Name, Value>& obj) const
+        template<typename KeyName, typename ValueType>
+        bool operator!=(const std::map<KeyName, ValueType>& map) const
         {
-            JSONITY_ASSERT(isObject());
-            return !operator==(obj);
+            return !operator==(map);
         }
 
         bool operator!=(const Value& value) const
@@ -1076,40 +1076,77 @@ public:
         }
 
     public:
+
+        bool operator<(int32_t number) const
+        {
+            return (compare(number) < 0);
+        }
+
+        bool operator<(int64_t number) const
+        {
+            return (compare(number) < 0);
+        }
+
+        bool operator<(const char_t* str) const
+        {
+            return (compare(str) < 0);
+        }
+
+        bool operator<(const String& str) const
+        {
+            return (compare(str) < 0);
+        }
+
+        bool operator<(bool boolean) const
+        {
+            return (compare(boolean) < 0);
+        }
+
+        bool operator<(double real) const
+        {
+            return (compare(real) < 0);
+        }
+
         bool operator<(const Value& other) const
         {
-            JSONITY_ASSERT(
-                other.isNumber() ||
-                other.isString() ||
-                other.isBoolean() ||
-                other.isReal());
+            return (compare(other) < 0);
+        }
 
-            JSONITY_ASSERT(
-                isNumber() ||
-                isString() ||
-                isBoolean() ||
-                isReal());
+    public:
 
-            if (isString() && other.isString())
-            {
-                return (getString() < other.getString());
-            }
-            else if (isReal() && other.isReal())
-            {
-                return (getReal() < other.getReal());
-            }
-            else if (!isReal() && other.isReal())
-            {
-                return (getNumber() < other.getReal());
-            }
-            else if (isReal() && !other.isReal())
-            {
-                return (getReal() < other.getNumber());
-            }
-            else
-            {
-                return (getNumber() < other.getNumber());
-            }
+        bool operator>(int32_t number) const
+        {
+            return (compare(number) > 0);
+        }
+
+        bool operator>(int64_t number) const
+        {
+            return (compare(number) > 0);
+        }
+
+        bool operator>(const char_t* str) const
+        {
+            return (compare(str) > 0);
+        }
+
+        bool operator>(const String& str) const
+        {
+            return (compare(str) > 0);
+        }
+
+        bool operator>(bool boolean) const
+        {
+            return (compare(boolean) > 0);
+        }
+
+        bool operator>(double real) const
+        {
+            return (compare(real) > 0);
+        }
+
+        bool operator>(const Value& other) const
+        {
+            return (compare(other) > 0);
         }
 
     private:
@@ -1154,16 +1191,11 @@ public:
             data_.d_ = real;
         }
 
-        void assignArray(std::vector<Value>* arr)
-        {
-            type_ = ArrayType;
-            data_.arr_ = arr;
-        }
-
         template<typename ContainerType>
         void assignArray(const ContainerType& container)
         {
-            assignArray(new std::vector<Value>());
+            type_ = ArrayType;
+            data_.arr_ = new Array;
 
             for (typename ContainerType::const_iterator it =
                     container.begin();
@@ -1173,16 +1205,11 @@ public:
             }
         }
 
-        void assignObject(std::map<Name, Value>* obj)
-        {
-            type_ = ObjectType;
-            data_.obj_ = obj;
-        }
-
         template<typename KeyType, typename ValueType>
         void assignObject(const std::map<KeyType, ValueType>& map)
         {
-            assignObject(new std::map<Name, Value>());
+            type_ = ObjectType;
+            data_.obj_ = new Object;
 
             for (typename std::map<KeyType, ValueType>::const_iterator it =
                     map.begin();
@@ -1250,39 +1277,13 @@ public:
             String* str_;
             bool b_;
             double d_;
-            std::vector<Value>* arr_;
-            std::map<Name, Value>* obj_;
+            Array* arr_;
+            Object* obj_;
         } data_;
 
         friend class JsonBase;
 
     }; // class JsonBasic::Value
-
-    //-----------------------------------------------------------------------//
-    // JsonBasic::Array
-    //-----------------------------------------------------------------------//
-
-    class Array : public Value
-    {
-    public:
-        explicit Array(size_t size = 0)
-        {
-            assignArray(new std::vector<Value>(size));
-        }
-    };
-
-    //-----------------------------------------------------------------------//
-    // JsonBasic::Object
-    //-----------------------------------------------------------------------//
-
-    class Object : public Value
-    {
-    public:
-        Object()
-        {
-            assignObject(new std::map<Name, Value>());
-        }
-    };
 
 public:
 
@@ -1410,14 +1411,14 @@ public:
             return errorCode_;
         }
 
-        uint32_t getCodeLine() const
+        int32_t getCodeLine() const
         {
             return codeLine_;
         }
 
     private:
         void setError(const Cursor& cur, int32_t proc,
-                      int32_t errorCode, uint32_t codeLine)
+                      int32_t errorCode, int32_t codeLine)
         {
             cur_ = cur;
             proc_ = proc;
@@ -1428,11 +1429,52 @@ public:
         Cursor cur_;
         int32_t proc_;
         int32_t errorCode_;
-        uint32_t codeLine_;
+        int32_t codeLine_;
 
         friend class JsonBase;
 
     }; // class JsonBasic::Error
+
+    //-----------------------------------------------------------------------//
+    // JsonBasic::Exception
+    //-----------------------------------------------------------------------//
+
+    class Exception : public std::exception
+    {
+    public:
+        Exception(int32_t codeLine, const std::string& message)
+            : codeLine_(codeLine), message_(message)
+        {
+        }
+
+        virtual ~Exception() throw()
+        {
+        }
+
+    public:
+        virtual const char* what() const throw()
+        {
+            return message_.c_str();
+        }
+
+        int32_t getCodeLine() const
+        {
+            return codeLine_;
+        }
+
+    private:
+        int32_t codeLine_;
+        std::string message_;
+    };
+
+    class TypeMismatchException : public Exception
+    {
+    public:
+        TypeMismatchException(int32_t codeLine)
+            : Exception(codeLine, "Json::TypeMismatchException")
+        {
+        }
+    };
 
     //-----------------------------------------------------------------------//
     // JsonBasic::EncodeStyle
@@ -1665,7 +1707,7 @@ private:
         }
 
         void setError(int32_t proc, int32_t errorCode,
-                      uint32_t codeLine)
+                      int32_t codeLine)
         {
             proc_ = proc;
             errorCode_ = errorCode;
@@ -1682,7 +1724,7 @@ private:
         Cursor cur_;
         int32_t proc_;
         int32_t errorCode_;
-        uint32_t codeLine_;
+        int32_t codeLine_;
     };
 
     class EncodeContext
@@ -1859,7 +1901,7 @@ public:
             return false;
         }
 
-        return value.equal(jsonValue, ignoreOrder);
+        return (value.compare(jsonValue, ignoreOrder) == 0);
     }
 
     // Null value
@@ -2297,7 +2339,7 @@ private:
         ctx.nextChar();
         ctx.skipWhiteSpace();
 
-        value.assignArray(new std::vector<Value>());
+        value.assignArray(Array());
 
         bool separator = true;
 
@@ -2354,7 +2396,7 @@ private:
         ctx.nextChar();
         ctx.skipWhiteSpace();
 
-        value.assignObject(new std::map<Name, Value>());
+        value.assignObject(Object());
         
         bool separator = true;
 
@@ -2608,7 +2650,7 @@ public:
             ctx.writeNewLine();
             ctx.increaseIndent();
 
-            for (typename std::vector<Value>::const_iterator it =
+            for (typename Array::const_iterator it =
                     value.getArray().begin();
                 it != value.getArray().end();)
             {
@@ -2643,7 +2685,7 @@ public:
             ctx.writeNewLine();
             ctx.increaseIndent();
 
-            for (typename std::map<Name, Value>::const_iterator it =
+            for (typename Object::const_iterator it =
                     value.getObject().begin();
                 it != value.getObject().end();)
             {
