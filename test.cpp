@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "jsonity.hpp"
-
 #include <list>
 #include <set>
+#include <deque>
+
+#include "jsonity.hpp"
 
 #ifdef WIN32
 #include <tchar.h>
@@ -599,6 +600,21 @@ void test7()
     }
 
     {
+        std::map<int, int> map;
+        map[100] = 1111;
+        map[200] = 2222;
+        map[300] = 3333;
+
+        std::string jsonStr;
+        Json::encode(map, jsonStr);
+
+        Json::Error error;
+        JSONITY_ASSERT(Json::equal(map,
+            "{ \"100\": 1111, \"200\": 2222, \"300\": 3333}", error.isEmpty()));
+
+    }
+
+    {
         Json::Object obj;
 
         obj["aaa"] = 666;
@@ -929,9 +945,132 @@ void test11()
             break;
         }
     }
+
+    {
+        Json::Value v = 100;
+
+        for (;;)
+        {
+            try
+            {
+                v.getString();
+            }
+            catch (const std::exception& e)
+            {
+                printf("%s\n", e.what());
+                break;
+            }
+
+            JSONITY_ASSERT(false);
+            break;
+        }
+    }
 }
 
-void example1()
+// User Object
+class MyData : public Json::UserValue<MyData>
+{
+public:
+    MyData(int data1, const std::string& data2)
+    {
+        data1_ = data1;
+        data2_ = data2;
+    }
+    MyData(const MyData& other)
+    {
+        data1_ = other.data1_;
+        data2_ = other.data2_;
+    }
+    ~MyData()
+    {
+    }
+
+    int getData1() const
+    {   return data1_;    }
+    const std::string& getData2() const
+    {   return data2_;    }
+
+protected:
+
+    // Encode
+    virtual void encode(Json::EncodeContext& ctx) const
+    {
+        std::ostringstream oss;
+        oss << data2_ << "-" << data1_;
+
+        Json::encodeString(ctx, oss.str());
+    }
+
+private:
+    int data1_;
+    std::string data2_;
+};
+
+void test12()
+{
+    {
+        std::vector<MyData> vec;
+        vec.push_back(MyData(1, "111"));
+        vec.push_back(MyData(2, "222"));
+        vec.push_back(MyData(3, "333"));
+
+        std::string s;
+        Json::encode(vec, s);
+
+        printf("%s\n", s.c_str());
+    }
+
+    {
+        std::vector<MyData*> vec;
+        vec.push_back(new MyData(100, "AAA"));
+        vec.push_back(new MyData(200, "BBB"));
+        vec.push_back(new MyData(300, "CCC"));
+
+        std::string s;
+        Json::encode(vec, s);
+
+        printf("%s\n", s.c_str());
+
+        for (size_t index= 0; index < vec.size(); ++index)
+        {
+            delete vec[index];
+        }
+    }
+
+    {
+        MyData myData1(777, "VVV");
+        Json::Value v = myData1;
+
+        MyData* myDataPtr = v.getUserValuePtr<MyData>();
+
+        JSONITY_ASSERT(myData1.getData1() == myDataPtr->getData1());
+        JSONITY_ASSERT(myData1.getData2() == myDataPtr->getData2());
+
+        MyData& myData2 = v.getUserValue<MyData>();
+
+        JSONITY_ASSERT(myData1.getData1() == myData2.getData1());
+        JSONITY_ASSERT(myData1.getData2() == myData2.getData2());
+    }
+
+    {
+        MyData* myDataPtr1 = new MyData(777, "VVV");
+        Json::Value v = myDataPtr1;
+
+        MyData* myDataPtr2 = v.getUserValuePtr<MyData>();
+
+        JSONITY_ASSERT(myDataPtr1 == myDataPtr2);
+
+        MyData& myData1 = v.getUserValue<MyData>();
+
+        JSONITY_ASSERT(myDataPtr1 == &myData1);
+
+        delete myDataPtr1;
+    }
+
+    return;
+}
+
+void example1_1()
 {
     std::string jsonStr1 =
         "{"
@@ -996,7 +1135,7 @@ void example1()
     return;
 }
 
-void example2()
+void example1_2()
 {
     std::string jsonStr2 =
         "{"
@@ -1030,7 +1169,7 @@ void example2()
     return;
 }
 
-void example3()
+void example2_1()
 {
     Json::Object root_obj;
 
@@ -1067,29 +1206,77 @@ void example3()
     //  "name5":["test",-400,false],"name6":{"xxx":-1.5,"yyy":true,"zzz":"test_test"},
     //  "name7":[444,777]}"
 
+    JSONITY_ASSERT(jsonStr == "{\"name1\":100,\"name2\":true,\"name3\":\"data_string\",\"name4\":null,"
+      "\"name5\":[\"test\",-400,false],\"name6\":{\"xxx\":-1.5,\"yyy\":true,\"zzz\":\"test_test\"},"
+      "\"name7\":[444,777]}");
+
     return;
 }
 
-void example4()
+void example2_2()
 {
-    std::map<std::string, std::list<std::string> > map;  // any STL type (map, vector, list, set, ...)
+    Json::Object root_obj;
 
-    std::list<std::string> list;
-    list.push_back("vvv");
-    list.push_back("www");
-    list.push_back("xxx");
+    // User Object
+
+    MyData myData(99, "777");
+    root_obj["name1"] = myData;
+
+    MyData* myDataPtr = new MyData(55, "AAA");
+    root_obj["name2"] = myDataPtr;
+
+    std::string jsonStr;
+    Json::encode(root_obj, jsonStr);  // serialize
+
+    // jsonStr == {"name1":"777-99","name2":"AAA-55"}
+
+    delete myDataPtr;
+
+    JSONITY_ASSERT(jsonStr == "{\"name1\":\"777-99\",\"name2\":\"AAA-55\"}");
+
+    return;
+}
+
+void example2_3()
+{
+    std::map<std::string, std::string> map;  // any STL type (map, vector, list, set, ...)
+
+    map["name1"] = "data1";
+    map["name2"] = "data2";
+    map["name3"] = "data3";
+
+    std::string jsonStr;
+    Json::encode(map, jsonStr);  // serialize
+
+    // jsonStr == {"name1":"data1","name2":"data2","name3":"data3"}
+
+    JSONITY_ASSERT(jsonStr == "{\"name1\":\"data1\",\"name2\":\"data2\",\"name3\":\"data3\"}");
+}
+
+void example2_4()
+{
+    std::map<std::string, std::list<MyData> > map;  // any STL type (map, vector, list, set, ...)
+
+    // User Object
+
+    std::list<MyData> list;
+    list.push_back(MyData(66, "666"));
+    list.push_back(MyData(77, "777"));
+    list.push_back(MyData(88, "888"));
 
     map["name"] = list;
 
     std::string jsonStr;
     Json::encode(map, jsonStr);  // serialize
 
-    // jsonStr == {"name":["vvv","www","xxx"]}
+    // jsonStr == {"name":["666-66","777-77","888-88"]}
+
+    JSONITY_ASSERT(jsonStr == "{\"name\":[\"666-66\",\"777-77\",\"888-88\"]}");
 
     return;
 }
 
-void example5()
+void example2_5()
 {
     std::map<std::string, std::vector<int> > map;
 
@@ -1138,7 +1325,7 @@ void example5()
     return;
 }
 
-void example6()
+void example3_1()
 {
     std::string jsonStr =
         "{"
@@ -1154,7 +1341,7 @@ void example6()
     JSONITY_ASSERT(result);
 }
 
-void example7()
+void example3_2()
 {
     std::list<int> list;
     list.push_back(100);
@@ -1171,6 +1358,7 @@ void example7()
     JSONITY_ASSERT(result2);
     JSONITY_ASSERT(!result3);
 }
+
 #ifdef WIN32
 int _tmain(int, _TCHAR**) {
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -1189,13 +1377,19 @@ int main(int, char**) {
     test9();
     test10();
     test11();
-    example1();
-    example2();
-    example3();
-    example4();
-    example5();
-    example6();
-    example7();
+    test12();
+
+    example1_1();
+    example1_2();
+
+    example2_1();
+    example2_2();
+    example2_3();
+    example2_4();
+    example2_5();
+
+    example3_1();
+    example3_2();
 
     return 0;
 }

@@ -5,6 +5,8 @@ JSonity is JSON utility for C++
 
 ## Features
 * One header file only.
+* Serializing User Objects into JSON String.
+* Serializing STL (map, vector, list, ...) into JSON String directly.
 * Simple easy interface.
 
 ## Examples
@@ -18,7 +20,7 @@ using namespace jsonity;
 #### Parse JSON string
 
 ```c++
-// example1
+// example1_1
 
 std::string jsonStr1 =
     "{"
@@ -68,7 +70,7 @@ catch (const Json::TypeMismatchException&)
 ```
 
 ```c++
-// example2
+// example1_2
 
 std::string jsonStr2 =
     "{"
@@ -98,7 +100,7 @@ int n = v["name1"]["data1"][3]["subdata1"][0];  // 600
 #### Serialize object to JSON string
 
 ```c++
-// example3
+// example2_1
 
 Json::Object root_obj;
 
@@ -137,25 +139,103 @@ Json::encode(root_obj, jsonStr);  // serialize
 ```
 
 ```c++
-// example4
+// example2_2
 
-std::map<std::string, std::list<std::string> > map;  // any STL type (map, vector, list, set, ...)
+// User Object
+class MyData : public Json::UserValue<MyData>
+{
+public:
+    MyData(int data1, const std::string& data2)
+    {
+        data1_ = data1;
+        data2_ = data2;
+    }
+    MyData(const MyData& other)
+    {
+        data1_ = other.data1_;
+        data2_ = other.data2_;
+    }
+    ~MyData()
+    {
+    }
 
-std::list<std::string> list;
-list.push_back("vvv");
-list.push_back("www");
-list.push_back("xxx");
+    int getData1() const
+    {   return data1_;    }
+    const std::string& getData2() const
+    {   return data2_;    }
+
+protected:
+
+    // Encode
+    virtual void encode(Json::EncodeContext& ctx) const
+    {
+        std::ostringstream oss;
+        oss << data2_ << "-" << data1_;
+
+        Json::encodeString(ctx, oss.str());
+    }
+
+private:
+    int data1_;
+    std::string data2_;
+};
+
+
+Json::Object root_obj;
+
+// User Object
+
+MyData myData(99, "777");
+root_obj["name1"] = myData;
+
+MyData* myDataPtr = new MyData(55, "AAA");
+root_obj["name2"] = myDataPtr;
+
+std::string jsonStr;
+Json::encode(root_obj, jsonStr);  // serialize
+
+// jsonStr == {"name1":"777-99","name2":"AAA-55"}
+
+delete myDataPtr;
+```
+
+```c++
+// example2_3
+
+std::map<std::string, std::string> map;  // any STL type (map, vector, list, set, ...)
+
+map["name1"] = "data1";
+map["name2"] = "data2";
+map["name3"] = "data3";
+
+std::string jsonStr;
+Json::encode(map, jsonStr);  // serialize
+
+// jsonStr == {"name1":"data1","name2":"data2","name3":"data3"}
+```
+
+```c++
+// example2_4
+
+std::map<std::string, std::list<MyData> > map;  // any STL type (map, vector, list, set, ...)
+
+// User Object
+
+std::list<MyData> list;
+list.push_back(MyData(66, "666"));
+list.push_back(MyData(77, "777"));
+list.push_back(MyData(88, "888"));
 
 map["name"] = list;
 
 std::string jsonStr;
 Json::encode(map, jsonStr);  // serialize
 
-// jsonStr == {"name":["vvv","www","xxx"]}"
+// jsonStr == {"name":["666-66","777-77","888-88"]}
 ```
 
 ```c++
-// example5
+// example2_5
 
 std::map<std::string, std::vector<int> > map;
 
@@ -205,7 +285,7 @@ Json::encode(map, jsonStr2, &es2);  // serialize (for C++ Program)
 #### Compare object to JSON string
 
 ```c++
-// example6
+// example3_1
 
 std::string jsonStr =
     "{"
@@ -220,7 +300,7 @@ bool result = Json::equal(v, jsonStr);  // true
 ```
 
 ```c++
-// example7
+// example3_2
 
 std::list<int> list;
 list.push_back(100);

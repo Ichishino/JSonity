@@ -47,7 +47,7 @@ typedef __int64 int64_t;
 
 #ifndef NDEBUG
 #include <cassert>
-#define JSONITY_ASSERT(exp) assert(exp)
+#define JSONITY_ASSERT(exp) assert((exp))
 #else
 #define JSONITY_ASSERT
 #endif
@@ -56,7 +56,18 @@ typedef __int64 int64_t;
     (throw TypeMismatchException(__LINE__))
 
 #define JSONITY_TYPE_CHECK(exp) \
-    { if (!exp) JSONITY_THROW_TYPE_MISMATCH(); }
+    { if (!(exp)) JSONITY_THROW_TYPE_MISMATCH(); }
+
+#define JSONITY_VALUE_IMPL_ARRAY(type, assignFunc) \
+    template<typename ValueType> \
+    Value(const type<ValueType>& container) \
+        {   assignFunc(container);    } \
+    template<typename ValueType> \
+    void setArray(const type<ValueType>& container) \
+        {   destroy(); assignFunc(container);   } \
+    template<typename ValueType> \
+    Value& operator=(const type<ValueType>& container) \
+        {   setArray(container); return *this;  }
 
 #ifdef _MSC_VER
 #pragma warning (disable : 4503) // Disable truncated name warning
@@ -72,6 +83,8 @@ namespace jsonity {
 template<typename CharType> class JsonBase
 {
 public:
+    class Value;
+
     typedef CharType char_t;
 
     // String
@@ -79,8 +92,6 @@ public:
 
     // Name
     typedef String Name;
-
-    class Value;
 
     // Array
     typedef std::vector<Value> Array;
@@ -94,6 +105,46 @@ public:
     typedef std::basic_ostringstream<
         char_t, std::char_traits<char_t>,
         std::allocator<char_t> > OSStream;
+
+    //-----------------------------------------------------------------------//
+    // JsonBase::UserValue
+    //-----------------------------------------------------------------------//
+
+    class EncodeContext;
+
+    class UserValueBase
+    {
+    public:
+        virtual ~UserValueBase() {}
+
+    public:
+        virtual void encode(EncodeContext& ctx) const = 0;
+
+    protected:
+        UserValueBase() {}
+
+    private:
+        virtual UserValueBase* duplicate() const = 0;
+
+        friend class Value;
+    };
+
+    template<typename UserValueType>
+    class UserValue : public UserValueBase
+    {
+    public:
+        virtual ~UserValue() {}
+
+    protected:
+        UserValue() {}
+
+    private:
+        UserValueBase* duplicate() const
+        {
+            return new UserValueType(
+                (const UserValueType&)*this);
+        }
+    };
 
 public:
 
@@ -112,6 +163,8 @@ public:
         static const Type RealType = 4; 
         static const Type ArrayType = 5;
         static const Type ObjectType = 6;
+        static const Type UserType = 7;
+        static const Type UserPtrType = 8;
 
         Value()
         {
@@ -148,16 +201,39 @@ public:
             assignReal(real);
         }
 
-        template<typename ContainerType>
-        Value(const ContainerType& container)
-        {
-            assignArray(container);
-        }
+        JSONITY_VALUE_IMPL_ARRAY(std::vector, assignArrayByIndex);
+
+#ifdef _LIST_
+        JSONITY_VALUE_IMPL_ARRAY(std::list, assignArrayByPushBack);
+#endif
+
+#ifdef _DEQUE_
+        JSONITY_VALUE_IMPL_ARRAY(std::deque, assignArrayByPushBack);
+#endif
+
+#ifdef _SET_
+        JSONITY_VALUE_IMPL_ARRAY(std::set, assignArrayByInsert);
+        JSONITY_VALUE_IMPL_ARRAY(std::multiset, assignArrayByInsert);
+#endif
+
+#ifdef _ARRAY_
+        JSONITY_VALUE_IMPL_ARRAY(std::array, assignArrayByIndex);
+#endif
 
         template<typename KeyType, typename ValueType>
         Value(const std::map<KeyType, ValueType>& map)
         {
             assignObject(map);
+        }
+
+        Value(const UserValueBase& userValue)
+        {
+            assignUserValue(userValue);
+        }
+
+        Value(UserValueBase* userValue)
+        {
+            assignUserValuePtr(userValue);
         }
 
         Value(const Value& other)
@@ -187,6 +263,11 @@ public:
             {
                 delete data_.obj_;
                 data_.obj_ = NULL;
+            }
+            else if (isUserValue())
+            {
+                delete data_.user_;
+                data_.user_ = NULL;
             }
 
             type_ = NullType;
@@ -234,6 +315,16 @@ public:
         bool isObject() const
         {
             return (getType() == ObjectType);
+        }
+
+        bool isUserValue() const
+        {
+            return (getType() == UserType);
+        }
+
+        bool isUserValuePtr() const
+        {
+            return (getType() == UserPtrType);
         }
 
     public:
@@ -336,6 +427,46 @@ public:
             return *data_.obj_;
         }
 
+        template<typename UserValueType>
+        UserValueType& getUserValue()
+        {
+            JSONITY_TYPE_CHECK(isUserValue() || isUserValuePtr());
+
+            UserValueType* userValue =
+                dynamic_cast<UserValueType*>(data_.user_);
+
+            JSONITY_TYPE_CHECK(userValue != NULL);
+
+            return *userValue;
+        }
+
+        template<typename UserValueType>
+        const UserValueType& getUserValue() const
+        {
+            JSONITY_TYPE_CHECK(isUserValue() || isUserValuePtr());
+
+            UserValueType* userValue =
+                dynamic_cast<UserValueType*>(data_.user_);
+
+            JSONITY_TYPE_CHECK(userValue != NULL);
+
+            return *userValue;
+        }
+
+        template<typename UserValueType>
+        UserValueType* getUserValuePtr()
+        {
+            JSONITY_TYPE_CHECK(isUserValue() || isUserValuePtr());
+            return dynamic_cast<UserValueType*>(data_.user_);
+        }
+
+        template<typename UserValueType>
+        const UserValueType* getUserValue() const
+        {
+            JSONITY_TYPE_CHECK(isUserValue() || isUserValuePtr());
+            return dynamic_cast<UserValueType*>(data_.user_);
+        }
+
     public:
 
         // Setter
@@ -376,18 +507,23 @@ public:
             assignReal(real);
         }
 
-        template<typename ContainerType>
-        void setArray(const ContainerType& container)
-        {
-            destroy();
-            assignArray(container);
-        }
-
         template<typename KeyType, typename ValueType>
         void setObject(const std::map<KeyType, ValueType>& map)
         {
             destroy();
             assignObject(map);
+        }
+
+        void setUserValue(const UserValueBase& userValue)
+        {
+            destroy();
+            assignUserValue(userValue);
+        }
+
+        void setUserValue(UserValueBase* userValue)
+        {
+            destroy();
+            assignUserValuePtr(userValue);
         }
 
         void setValue(const Value& value)
@@ -480,7 +616,7 @@ public:
             }
         }
 
-public:
+    public:
 
         // Convert
 
@@ -631,14 +767,15 @@ public:
 
         // Compare
 
-        int64_t compare(int32_t number,
+        int32_t compare(int32_t number,
                         bool ignoreOrder = true) const
         {
             ((void)ignoreOrder);
 
             if (isNumber() || isBoolean())
             {
-                return (getNumber() - number);
+                return static_cast<int32_t>(
+                    getNumber() - number);
             }
             else if (isReal())
             {
@@ -650,14 +787,15 @@ public:
             }
         }
 
-        int64_t compare(int64_t number,
+        int32_t compare(int64_t number,
                         bool ignoreOrder = true) const
         {
             ((void)ignoreOrder);
 
             if (isNumber() || isBoolean())
             {
-                return (getNumber() - number);
+                return static_cast<int32_t>(
+                    getNumber() - number);
             }
             else if (isReal())
             {
@@ -669,7 +807,7 @@ public:
             }
         }
 
-        int64_t compare(const char_t* str,
+        int32_t compare(const char_t* str,
                         bool ignoreOrder = true) const
         {
             JSONITY_TYPE_CHECK(isString());
@@ -677,7 +815,7 @@ public:
             return getString().compare(str);
         }
 
-        int64_t compare(const String& str,
+        int32_t compare(const String& str,
                         bool ignoreOrder = true) const
         {
             JSONITY_TYPE_CHECK(isString());
@@ -685,7 +823,7 @@ public:
             return getString().compare(str);
         }
 
-        int64_t compare(bool boolean,
+        int32_t compare(bool boolean,
                         bool ignoreOrder = true) const
         {
             ((void)ignoreOrder);
@@ -700,7 +838,7 @@ public:
             }
         }
 
-        int64_t compare(double real,
+        int32_t compare(double real,
                         bool ignoreOrder = true) const
         {
             ((void)ignoreOrder);
@@ -727,7 +865,7 @@ public:
         }
 
         template<typename ConatainerType>
-        int64_t compare(const ConatainerType& container,
+        int32_t compare(const ConatainerType& container,
                         bool ignoreOrder = true) const
         {
             JSONITY_TYPE_CHECK(isArray());
@@ -776,7 +914,8 @@ public:
 
                 for (; itOther != container.end(); ++itOther)
                 {
-                    int64_t result = itArr->compare(*itOther, ignoreOrder);
+                    int32_t result =
+                        itArr->compare(*itOther, ignoreOrder);
                     if (result != 0)
                     {
                         return result;
@@ -789,7 +928,7 @@ public:
         }
 
         template<typename KeyType, typename ValueType>
-        int64_t compare(const std::map<KeyType, ValueType>& map,
+        int32_t compare(const std::map<KeyType, ValueType>& map,
                         bool ignoreOrder = true) const
         {
             JSONITY_TYPE_CHECK(isObject());
@@ -818,7 +957,7 @@ public:
                     return -1;
                 }
 
-                int64_t result =
+                int32_t result =
                     it->second.compare(itOther->second, ignoreOrder);
                 if (result != 0)
                 {
@@ -829,7 +968,7 @@ public:
             return 0;
         }
 
-        int64_t compare(const Value& value,
+        int32_t compare(const Value& value,
                         bool ignoreOrder = true) const
         {
             if (isNull() && value.isNull())
@@ -913,17 +1052,28 @@ public:
             return *this;
         }
 
-        template<typename ContainerType>
-        Value& operator=(const ContainerType& container)
-        {
-            setArray(container);
-            return *this;
-        }
-
         template<typename KeyType, typename ValueType>
         Value& operator=(const std::map<KeyType, ValueType>& map)
         {
             setObject(map);
+            return *this;
+        }
+
+        Value& operator=(const UserValueBase& userValue)
+        {
+            setUserValue(userValue);
+            return *this;
+        }
+
+        Value& operator=(UserValueBase* userValue)
+        {
+            setUserValue(userValue);
+            return *this;
+        }
+
+        Value& operator=(const UserValueBase* userValue)
+        {
+            setUserPtrValue(userValue);
             return *this;
         }
 
@@ -1150,6 +1300,27 @@ public:
         }
 
     private:
+        void encodeUserValue(EncodeContext& ctx) const
+        {
+            JSONITY_ASSERT(
+                isUserValue() || isUserValuePtr());
+            data_.user_->encode(ctx);
+        }
+
+    private:
+        const UserValueBase& getUserValueBase() const
+        {
+            JSONITY_TYPE_CHECK(isUserValue());
+            return *data_.user_;
+        }
+
+        const UserValueBase* getUserValueBasePtr() const
+        {
+            JSONITY_TYPE_CHECK(isUserValuePtr());
+            return data_.user_;
+        }
+
+    private:
 
         void assignNull()
         {
@@ -1192,17 +1363,36 @@ public:
         }
 
         template<typename ContainerType>
-        void assignArray(const ContainerType& container)
+        void assignArrayByIndex(const ContainerType& container)
+        {
+            type_ = ArrayType;
+            data_.arr_ = new Array(container.size());
+
+            for (size_t index = 0;
+                index < container.size(); ++index)
+            {
+                getArray()[index] = container[index];
+            }
+        }
+
+        template<typename ContainerType>
+        void assignArrayByPushBack(const ContainerType& container)
         {
             type_ = ArrayType;
             data_.arr_ = new Array;
 
-            for (typename ContainerType::const_iterator it =
-                    container.begin();
-                it != container.end(); ++it)
-            {
-                getArray().push_back(*it);
-            }
+            std::copy(container.begin(), container.end(),
+                std::back_inserter(getArray()));
+        }
+
+        template<typename ContainerType>
+        void assignArrayByInsert(const ContainerType& container)
+        {
+            type_ = ArrayType;
+            data_.arr_ = new Array;
+
+            std::copy(container.begin(), container.end(),
+                std::inserter(getArray(), getArray().end()));
         }
 
         template<typename KeyType, typename ValueType>
@@ -1219,6 +1409,18 @@ public:
                 oss << it->first;
                 getObject()[oss.str()] = it->second;
             }
+        }
+
+        void assignUserValue(const UserValueBase& userValue)
+        {
+            type_ = UserType;
+            data_.user_ = userValue.duplicate();
+        }
+
+        void assignUserValuePtr(const UserValueBase* userValue)
+        {
+            type_ = UserPtrType;
+            data_.user_ = const_cast<UserValueBase*>(userValue);
         }
 
         void assignValue(const Value& value)
@@ -1241,11 +1443,19 @@ public:
             }
             else if (value.isArray())
             {
-                assignArray(value.getArray());
+                assignArrayByIndex(value.getArray());
             }
             else if (value.isObject())
             {
                 assignObject(value.getObject());
+            }
+            else if (value.isUserValue())
+            {
+                assignUserValue(value.getUserValueBase());
+            }
+            else if (value.isUserValuePtr())
+            {
+                assignUserValuePtr(value.getUserValueBasePtr());
             }
             else
             {
@@ -1279,6 +1489,7 @@ public:
             double d_;
             Array* arr_;
             Object* obj_;
+            UserValueBase* user_;
         } data_;
 
         friend class JsonBase;
@@ -1828,7 +2039,8 @@ private:
         {
             str = oss_.str();
         }
-	protected:
+
+    protected:
 		EncodeContext(const EncodeContext&);
 		EncodeContext& operator=(const EncodeContext&);
 
@@ -2339,7 +2551,7 @@ private:
         ctx.nextChar();
         ctx.skipWhiteSpace();
 
-        value.assignArray(Array());
+        value.assignArrayByIndex(Array());
 
         bool separator = true;
 
@@ -2526,31 +2738,24 @@ private:
 
 public:
 
-    static void encodeNull(EncodeContext& ctx, const Value& value)
+    static void encodeNull(EncodeContext& ctx)
     {
-        JSONITY_ASSERT(value.isNull());
-        ((void)value);
-
         ctx.getOutputStream() << 'n' << 'u' << 'l' << 'l';
     }
 
-    static void encodeNumber(EncodeContext& ctx, const Value& value)
+    static void encodeNumber(EncodeContext& ctx, int64_t number)
     {
-        JSONITY_ASSERT(value.isNumber());
-
-        ctx.getOutputStream() << value.getNumber();
+        ctx.getOutputStream() << number;
     }
 
-    static void encodeString(EncodeContext& ctx, const Value& value)
+    static void encodeString(EncodeContext& ctx, const String& str)
     {
-        JSONITY_ASSERT(value.isString());
-
         ctx.writeEscape();
         ctx.getOutputStream() << '\"';
 
-        for (size_t index = 0; index < value.getSize(); ++index)
+        for (size_t index = 0; index < str.size(); ++index)
         {
-            char_t ch = value.getString().at(index);
+            char_t ch = str.at(index);
 
             char_t escapePairCh = '\0';
                 
@@ -2618,11 +2823,9 @@ public:
         ctx.getOutputStream() << '\"';
     }
 
-    static void encodeBoolean(EncodeContext& ctx, const Value& value)
+    static void encodeBoolean(EncodeContext& ctx, bool boolean)
     {
-        JSONITY_ASSERT(value.isBoolean());
-
-        if (value.getBoolean())
+        if (boolean)
         {
             ctx.getOutputStream() << 't' << 'r' << 'u' << 'e';
         }
@@ -2632,11 +2835,9 @@ public:
         }
     }
 
-    static void encodeReal(EncodeContext& ctx, const Value& value)
+    static void encodeReal(EncodeContext& ctx, double real)
     {
-        JSONITY_ASSERT(value.isReal());
-
-        ctx.getOutputStream() << value.getReal();
+        ctx.getOutputStream() << real;
     }
 
     static void encodeArray(EncodeContext& ctx, const Value& value)
@@ -2719,23 +2920,23 @@ public:
     {
         if (value.isNull())
         {
-            encodeNull(ctx, value);
+            encodeNull(ctx);
         }
         else if (value.isNumber())
         {
-            encodeNumber(ctx, value);
+            encodeNumber(ctx, value.getNumber());
         }
         else if (value.isString())
         {
-            encodeString(ctx, value);
+            encodeString(ctx, value.getString());
         }
         else if (value.isBoolean())
         {
-            encodeBoolean(ctx, value);
+            encodeBoolean(ctx, value.getBoolean());
         }
         else if (value.isReal())
         {
-            encodeReal(ctx, value);
+            encodeReal(ctx, value.getReal());
         }
         else if (value.isArray())
         {
@@ -2744,6 +2945,14 @@ public:
         else if (value.isObject())
         {
             encodeObject(ctx, value);
+        }
+        else if (value.isUserValue())
+        {
+            value.encodeUserValue(ctx);
+        }
+        else if (value.isUserValuePtr())
+        {
+            value.encodeUserValue(ctx);
         }
     }
 
