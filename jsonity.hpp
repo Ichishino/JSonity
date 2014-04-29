@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.0.0
+  JSonity : JSON Utility for C++   Version 1.0.1
 
   Copyright (c) 2014, Ichishino
 
@@ -29,6 +29,9 @@
 
 #ifndef JSONITY_HPP_
 #define JSONITY_HPP_
+
+// If using <std::list, set, deque, array, forward_list, ...>
+// Include them before this file.
 
 #include <map>
 #include <vector>
@@ -59,24 +62,24 @@ typedef __int64 int64_t;
 #define JSONITY_TYPE_CHECK(exp) \
     { if (!(exp)) JSONITY_THROW_TYPE_MISMATCH(); }
 
-#define JSONITY_VALUE_IMPL_STL_CONTAINER(type, assignFunc) \
+#define JSONITY_VALUE_IMPL_STL_CONTAINER(type) \
     template<typename ValueType> \
     Value(const type<ValueType>& container) \
-        {   assignFunc(container);    } \
+        {   assignArray(container);    } \
     template<typename ValueType> \
     void setArray(const type<ValueType>& container) \
-        {   destroy(); assignFunc(container);   } \
+        {   destroy(); assignArray(container);   } \
     template<typename ValueType> \
     Value& operator=(const type<ValueType>& container) \
         {   setArray(container); return *this;  }
 
 #define JSONITY_VALUE_IMPL_STL_CONTAINER_FIXED_SIZE(type) \
     template<typename ValueType, size_t Size> \
-    Value(const std::array<ValueType, Size>& container) \
-        {   assignArrayByIndex(container);    } \
+    Value(const type<ValueType, Size>& container) \
+        {   assignArray(container);    } \
     template<typename ValueType, size_t Size> \
     void setArray(const type<ValueType, Size>& container) \
-        {   destroy(); assignArrayByIndex(container);   } \
+        {   destroy(); assignArray(container);   } \
     template<typename ValueType, size_t Size> \
     Value& operator=(const type<ValueType, Size>& container) \
         {   setArray(container); return *this;  }
@@ -222,23 +225,32 @@ public:
             assignReal(real);
         }
 
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::vector, assignArrayByIndex);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::vector);
 
 #if defined(_LIST_) || defined(_GLIBCXX_LIST)
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::list, assignArrayByPushBack);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::list);
 #endif
 
 #if defined(_DEQUE_) || defined(_GLIBCXX_DEQUE)
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::deque, assignArrayByPushBack);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::deque);
 #endif
 
 #if defined(_SET_) || defined(_GLIBCXX_SET)
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::set, assignArrayByInsert);
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::multiset, assignArrayByInsert);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::set);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::multiset);
 #endif
 
 #if defined(_ARRAY_) || defined(_GLIBCXX_ARRAY)
         JSONITY_VALUE_IMPL_STL_CONTAINER_FIXED_SIZE(std::array);
+#endif
+
+#if defined(_FORWARD_LIST_) || defined(_GLIBCXX_FORWARD_LIST)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::forward_list);
+#endif
+
+#if defined(_UNORDERED_SET_) || defined(_GLIBCXX_UNORDERED_SET)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::unordered_set);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::unordered_multiset);
 #endif
 
         template<typename KeyType, typename ValueType>
@@ -1384,30 +1396,7 @@ public:
         }
 
         template<typename ContainerType>
-        void assignArrayByIndex(const ContainerType& container)
-        {
-            type_ = ArrayType;
-            data_.arr_ = new Array(container.size());
-
-            for (size_t index = 0;
-                index < container.size(); ++index)
-            {
-                getArray()[index] = container[index];
-            }
-        }
-
-        template<typename ContainerType>
-        void assignArrayByPushBack(const ContainerType& container)
-        {
-            type_ = ArrayType;
-            data_.arr_ = new Array;
-
-            std::copy(container.begin(), container.end(),
-                std::back_inserter(getArray()));
-        }
-
-        template<typename ContainerType>
-        void assignArrayByInsert(const ContainerType& container)
+        void assignArray(const ContainerType& container)
         {
             type_ = ArrayType;
             data_.arr_ = new Array;
@@ -1428,6 +1417,10 @@ public:
             {
                 OSStream oss;
                 oss << it->first;
+                if (oss.fail())
+                {
+                    JSONITY_THROW_TYPE_MISMATCH();
+                }
                 getObject()[oss.str()] = it->second;
             }
         }
@@ -1464,7 +1457,7 @@ public:
             }
             else if (value.isArray())
             {
-                assignArrayByIndex(value.getArray());
+                assignArray(value.getArray());
             }
             else if (value.isObject())
             {
@@ -2806,7 +2799,7 @@ private:
         ctx.nextChar();
         ctx.skipWhiteSpace();
 
-        value.assignArrayByIndex(Array());
+        value.assignArray(Array());
 
         bool separator = true;
 

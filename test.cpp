@@ -7,6 +7,8 @@
 
 #if !defined(_MSC_VER) || (_MSC_VER >= 1600)
 #include <array>
+#include <forward_list>
+#include <unordered_set>
 #endif
 
 #include "jsonity.hpp"
@@ -1091,6 +1093,18 @@ void test13()
     }
 
     {
+        std::forward_list<int> flist;
+        flist.insert_after(flist.before_begin(), 300);
+        flist.insert_after(flist.before_begin(), 200);
+        flist.insert_after(flist.before_begin(), 100);
+
+        std::string jsonStr;
+        Json::encode(flist, jsonStr);
+
+        JSONITY_ASSERT(jsonStr == "[100,200,300]");
+    }
+
+    {
         Json::Object obj;
 
         std::vector<int> vec(3);
@@ -1111,18 +1125,57 @@ void test13()
         set.insert(900);
         obj["set"] = set;
 
+        std::multiset<int> mset;
+        mset.insert(777);
+        mset.insert(888);
+        mset.insert(999);
+        obj["mset"] = mset;
+
         std::array<std::string, 3> arr;
         arr[0] = "A00";
         arr[1] = "B00";
         arr[2] = "C00";
-
         obj["arr"] = arr;
+
+        std::forward_list<std::string> flist;
+        flist.insert_after(flist.before_begin(), "F00");
+        flist.insert_after(flist.before_begin(), "E00");
+        flist.insert_after(flist.before_begin(), "D00");
+        obj["flist"] = flist;
+
+        std::deque<double> deq;
+        deq.push_back(0.1);
+        deq.push_back(0.2);
+        deq.push_back(0.3);
+        obj["deq"] = deq;
+
+        std::unordered_set<int> uo_set;
+        uo_set.insert(123);
+        uo_set.insert(456);
+        uo_set.insert(789);
+        obj["uo_set"] = uo_set;
+
+        std::unordered_multiset<std::string> uo_mset;
+        uo_mset.insert("red");
+        uo_mset.insert("blue");
+        uo_mset.insert("yellow");
+        obj["uo_mset"] = uo_mset;
 
         std::string jsonStr;
         Json::encode(obj, jsonStr);
 
         JSONITY_ASSERT(Json::equal(obj,
-            "{\"vec\":[100,200,300],\"list\":[400,500,600],\"set\":[700,800,900],\"arr\":[\"A00\",\"B00\",\"C00\"]}"));
+            "{"
+                "\"vec\": [ 100, 200, 300 ],"
+                "\"list\": [ 400, 500, 600 ],"
+                "\"set\": [ 700, 800, 900 ],"
+                "\"mset\": [ 777, 888, 999 ],"
+                "\"arr\": [ \"A00\", \"B00\", \"C00\" ],"
+                "\"flist\": [ \"D00\", \"E00\", \"F00\" ],"
+                "\"deq\": [ 0.1, 0.2, 0.3 ],"
+                "\"uo_set\": [ 123, 456, 789 ],"
+                "\"uo_mset\": [ \"red\", \"blue\", \"yellow\" ]"
+            "}"));
     }
 
 #endif

@@ -13,6 +13,13 @@ JSonity is JSON utility for C++
 ## Examples
 
 ```c++
+
+// If using <std::list, set, deque, array, forward_list, ...>
+// Include them before "jsonity.hpp"
+//
+// #include <list>
+// ...
+
 #include "jsonity.hpp"
 
 using namespace jsonity;
