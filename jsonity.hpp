@@ -1,9 +1,10 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 0.1.0
+  JSonity : JSON Utility for C++   Version 1.0.0
 
   Copyright (c) 2014, Ichishino
 
+  http://ichishino.nobody.jp/jsonity/index.html
   https://github.com/Ichishino/JSonity
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -58,7 +59,7 @@ typedef __int64 int64_t;
 #define JSONITY_TYPE_CHECK(exp) \
     { if (!(exp)) JSONITY_THROW_TYPE_MISMATCH(); }
 
-#define JSONITY_VALUE_IMPL_ARRAY(type, assignFunc) \
+#define JSONITY_VALUE_IMPL_STL_CONTAINER(type, assignFunc) \
     template<typename ValueType> \
     Value(const type<ValueType>& container) \
         {   assignFunc(container);    } \
@@ -67,6 +68,17 @@ typedef __int64 int64_t;
         {   destroy(); assignFunc(container);   } \
     template<typename ValueType> \
     Value& operator=(const type<ValueType>& container) \
+        {   setArray(container); return *this;  }
+
+#define JSONITY_VALUE_IMPL_STL_CONTAINER_FIXED_SIZE(type) \
+    template<typename ValueType, size_t Size> \
+    Value(const std::array<ValueType, Size>& container) \
+        {   assignArrayByIndex(container);    } \
+    template<typename ValueType, size_t Size> \
+    void setArray(const type<ValueType, Size>& container) \
+        {   destroy(); assignArrayByIndex(container);   } \
+    template<typename ValueType, size_t Size> \
+    Value& operator=(const type<ValueType, Size>& container) \
         {   setArray(container); return *this;  }
 
 #ifdef _MSC_VER
@@ -83,7 +95,16 @@ namespace jsonity {
 template<typename CharType> class JsonBase
 {
 public:
+    template<typename UserValueType> class UserValue;
+    class Cursor;
+    class Error;
     class Value;
+    class Exception;
+    class TypeMismatchException;
+    class EncodeStyle;
+    class EncodeContext;
+
+public:
 
     typedef CharType char_t;
 
@@ -106,11 +127,11 @@ public:
         char_t, std::char_traits<char_t>,
         std::allocator<char_t> > OSStream;
 
+public:
+
     //-----------------------------------------------------------------------//
     // JsonBase::UserValue
     //-----------------------------------------------------------------------//
-
-    class EncodeContext;
 
     class UserValueBase
     {
@@ -201,23 +222,23 @@ public:
             assignReal(real);
         }
 
-        JSONITY_VALUE_IMPL_ARRAY(std::vector, assignArrayByIndex);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::vector, assignArrayByIndex);
 
-#ifdef _LIST_
-        JSONITY_VALUE_IMPL_ARRAY(std::list, assignArrayByPushBack);
+#if defined(_LIST_) || defined(_GLIBCXX_LIST)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::list, assignArrayByPushBack);
 #endif
 
-#ifdef _DEQUE_
-        JSONITY_VALUE_IMPL_ARRAY(std::deque, assignArrayByPushBack);
+#if defined(_DEQUE_) || defined(_GLIBCXX_DEQUE)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::deque, assignArrayByPushBack);
 #endif
 
-#ifdef _SET_
-        JSONITY_VALUE_IMPL_ARRAY(std::set, assignArrayByInsert);
-        JSONITY_VALUE_IMPL_ARRAY(std::multiset, assignArrayByInsert);
+#if defined(_SET_) || defined(_GLIBCXX_SET)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::set, assignArrayByInsert);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::multiset, assignArrayByInsert);
 #endif
 
-#ifdef _ARRAY_
-        JSONITY_VALUE_IMPL_ARRAY(std::array, assignArrayByIndex);
+#if defined(_ARRAY_) || defined(_GLIBCXX_ARRAY)
+        JSONITY_VALUE_IMPL_STL_CONTAINER_FIXED_SIZE(std::array);
 #endif
 
         template<typename KeyType, typename ValueType>
@@ -1676,7 +1697,8 @@ public:
     private:
         int32_t codeLine_;
         std::string message_;
-    };
+
+    }; // clsss JsonBasic::Exception
 
     class TypeMismatchException : public Exception
     {
@@ -1685,7 +1707,8 @@ public:
             : Exception(codeLine, "Json::TypeMismatchException")
         {
         }
-    };
+
+    }; // clsss JsonBasic::TypeMismatchException
 
     //-----------------------------------------------------------------------//
     // JsonBasic::EncodeStyle
@@ -1855,88 +1878,11 @@ public:
 
     }; // JsonBasic::EncodeStyle
 
-private:
+public:
 
-    class DecodeContext
-    {
-    public:
-        DecodeContext(const String& str)
-        {
-            str_ = str.c_str();
-            reset();
-        }
-
-    public:
-        char_t getCurrentChar() const
-        {
-            return str_[cur_.getPos()];
-        }
-
-        const char_t* getCurrentHead() const
-        {
-            return &str_[cur_.getPos()];
-        }
-
-        void nextChar()
-        {
-            cur_.nextPos();
-            cur_.nextCol();
-        }
-
-        bool isEOF() const
-        {
-            return (getCurrentChar() == '\0');
-        }
-
-        void skipWhiteSpace()
-        {
-            while (!isEOF())
-            {
-                if ((getCurrentChar() == ' ') ||
-                    (getCurrentChar() == '\r') ||
-                    (getCurrentChar() == '\t'))
-                {
-                    nextChar();
-                    continue;
-                }
-                else if (getCurrentChar() == '\n')
-                {
-                    cur_.nextRow();
-                    nextChar();
-                    continue;
-                }
-                break;
-            }
-        }
-
-        void reset()
-        {
-            cur_.reset();
-            proc_ = 0;
-            errorCode_ = 0;
-            codeLine_ = 0;
-        }
-
-        void setError(int32_t proc, int32_t errorCode,
-                      int32_t codeLine)
-        {
-            proc_ = proc;
-            errorCode_ = errorCode;
-            codeLine_ = codeLine;
-        }
-
-        void getError(Error& error) const
-        {
-            error.setError(cur_, proc_, errorCode_, codeLine_);
-        }
-
-    private:        
-        const char_t* str_;
-        Cursor cur_;
-        int32_t proc_;
-        int32_t errorCode_;
-        int32_t codeLine_;
-    };
+    //-----------------------------------------------------------------------//
+    // JsonBasic::EncodeContext
+    //-----------------------------------------------------------------------//
 
     class EncodeContext
     {
@@ -2048,20 +1994,14 @@ private:
         OSStream oss_;
         size_t indent_;
         const EncodeStyle* style_;
-    };
 
-    class UnreadableEncodeContext : public EncodeContext
-    {
-    public:
-        void increaseIndent() {}
-        void decreaseIndent() {}
-        void writeIndent() {}
-        void writeNewLine() {}
-        void writeSeparator() {}
-        void writeEscape() {}
-    };
+    }; // JsonBasic::EncodeContext
 
 public:
+
+    //-----------------------------------------------------------------------//
+    // JsonBase Interfaces
+    //-----------------------------------------------------------------------//
 
     // Decode
     static bool decode(const String& jsonString, Value& value,
@@ -2123,7 +2063,322 @@ public:
         return nullValue;
     }
 
+    //-----------------------------------------------------------------------//
+    // Encoder
+    //-----------------------------------------------------------------------//
+
+    static void encodeNull(EncodeContext& ctx)
+    {
+        ctx.getOutputStream() << 'n' << 'u' << 'l' << 'l';
+    }
+
+    static void encodeNumber(EncodeContext& ctx, int64_t number)
+    {
+        ctx.getOutputStream() << number;
+    }
+
+    static void encodeString(EncodeContext& ctx, const String& str)
+    {
+        ctx.writeEscape();
+        ctx.getOutputStream() << '\"';
+
+        for (size_t index = 0; index < str.size(); ++index)
+        {
+            char_t ch = str.at(index);
+
+            char_t escapePairCh = '\0';
+
+            if (ch == '"')
+            {
+                escapePairCh = '\"';
+            }
+            else if (ch == '\\')
+            {
+                escapePairCh = '\\';
+            }
+            else if (ch == '/')
+            {
+                escapePairCh = '/';
+            }
+            else if (ch == '\b')
+            {
+                escapePairCh = 'b';
+            }
+            else if (ch == '\f')
+            {
+                escapePairCh = 'f';
+            }
+            else if (ch == '\n')
+            {
+                escapePairCh = 'n';
+            }
+            else if (ch == '\r')
+            {
+                escapePairCh = 'r';
+            }
+            else if (ch == '\t')
+            {
+                escapePairCh = 't';
+            }
+            else if (((uint32_t)ch < 0x20) || ((uint32_t)ch == 0x7f))
+            {
+                escapePairCh = 'u';
+            }
+
+            if (escapePairCh != '\0')
+            {
+                ctx.writeEscape();
+                ctx.getOutputStream() << '\\' << escapePairCh;
+
+                if (escapePairCh == 'u')
+                {
+                    char_t str[5];
+                    str[0] = '0';
+                    str[1] = '0';
+                    encodeHex((uint32_t)((ch & 0xf0) >> 4), str[2]);
+                    encodeHex((uint32_t)((ch & 0x0f)), str[3]);
+                    str[4] = '\0';
+
+                    ctx.getOutputStream() << str;
+                }
+            }
+            else
+            {
+                ctx.getOutputStream() << ch;
+            }
+        }
+
+        ctx.writeEscape();
+        ctx.getOutputStream() << '\"';
+    }
+
+    static void encodeBoolean(EncodeContext& ctx, bool boolean)
+    {
+        if (boolean)
+        {
+            ctx.getOutputStream() << 't' << 'r' << 'u' << 'e';
+        }
+        else
+        {
+            ctx.getOutputStream() << 'f' << 'a' << 'l' << 's' << 'e';
+        }
+    }
+
+    static void encodeReal(EncodeContext& ctx, double real)
+    {
+        ctx.getOutputStream() << real;
+    }
+
+    static void encodeArray(EncodeContext& ctx, const Value& value)
+    {
+        JSONITY_ASSERT(value.isArray());
+
+        ctx.getOutputStream() << '[';
+
+        if (!value.isEmpty())
+        {
+            ctx.writeNewLine();
+            ctx.increaseIndent();
+
+            for (typename Array::const_iterator it =
+                    value.getArray().begin();
+                it != value.getArray().end();)
+            {
+                ctx.writeIndent();
+
+                encodeValue(ctx, *it);
+                ++it;
+
+                if (it != value.getArray().end())
+                {
+                    ctx.getOutputStream() << ',';
+                    ctx.writeNewLine();
+                }
+            }
+
+            ctx.writeNewLine();
+            ctx.decreaseIndent();
+            ctx.writeIndent();
+        }
+
+        ctx.getOutputStream() << ']';
+    }
+
+    static void encodeObject(EncodeContext& ctx, const Value& value)
+    {
+        JSONITY_ASSERT(value.isObject());
+
+        ctx.getOutputStream() << '{';
+
+        if (!value.isEmpty())
+        {
+            ctx.writeNewLine();
+            ctx.increaseIndent();
+
+            for (typename Object::const_iterator it =
+                    value.getObject().begin();
+                it != value.getObject().end();)
+            {
+                ctx.writeIndent();
+
+                encodeString(ctx, it->first);
+
+                ctx.getOutputStream() << ':';
+                ctx.writeSeparator();
+
+                encodeValue(ctx, it->second);
+
+                ++it;
+
+                if (it != value.getObject().end())
+                {
+                    ctx.getOutputStream() << ',';
+                    ctx.writeNewLine();
+                }
+            }
+
+            ctx.writeNewLine();
+            ctx.decreaseIndent();
+            ctx.writeIndent();
+        }
+
+        ctx.getOutputStream() << '}';
+    }
+
+    static void encodeValue(EncodeContext& ctx, const Value& value)
+    {
+        if (value.isNull())
+        {
+            encodeNull(ctx);
+        }
+        else if (value.isNumber())
+        {
+            encodeNumber(ctx, value.getNumber());
+        }
+        else if (value.isString())
+        {
+            encodeString(ctx, value.getString());
+        }
+        else if (value.isBoolean())
+        {
+            encodeBoolean(ctx, value.getBoolean());
+        }
+        else if (value.isReal())
+        {
+            encodeReal(ctx, value.getReal());
+        }
+        else if (value.isArray())
+        {
+            encodeArray(ctx, value);
+        }
+        else if (value.isObject())
+        {
+            encodeObject(ctx, value);
+        }
+        else if (value.isUserValue())
+        {
+            value.encodeUserValue(ctx);
+        }
+        else if (value.isUserValuePtr())
+        {
+            value.encodeUserValue(ctx);
+        }
+    }
+
 private:
+
+    class UnreadableEncodeContext : public EncodeContext
+    {
+    public:
+        void increaseIndent() {}
+        void decreaseIndent() {}
+        void writeIndent() {}
+        void writeNewLine() {}
+        void writeSeparator() {}
+        void writeEscape() {}
+    };
+
+    class DecodeContext
+    {
+    public:
+        DecodeContext(const String& str)
+        {
+            str_ = str.c_str();
+            reset();
+        }
+
+    public:
+        char_t getCurrentChar() const
+        {
+            return str_[cur_.getPos()];
+        }
+
+        const char_t* getCurrentHead() const
+        {
+            return &str_[cur_.getPos()];
+        }
+
+        void nextChar()
+        {
+            cur_.nextPos();
+            cur_.nextCol();
+        }
+
+        bool isEOF() const
+        {
+            return (getCurrentChar() == '\0');
+        }
+
+        void skipWhiteSpace()
+        {
+            while (!isEOF())
+            {
+                if ((getCurrentChar() == ' ') ||
+                    (getCurrentChar() == '\r') ||
+                    (getCurrentChar() == '\t'))
+                {
+                    nextChar();
+                    continue;
+                }
+                else if (getCurrentChar() == '\n')
+                {
+                    cur_.nextRow();
+                    nextChar();
+                    continue;
+                }
+                break;
+            }
+        }
+
+        void reset()
+        {
+            cur_.reset();
+            proc_ = 0;
+            errorCode_ = 0;
+            codeLine_ = 0;
+        }
+
+        void setError(int32_t proc, int32_t errorCode,
+                      int32_t codeLine)
+        {
+            proc_ = proc;
+            errorCode_ = errorCode;
+            codeLine_ = codeLine;
+        }
+
+        void getError(Error& error) const
+        {
+            error.setError(cur_, proc_, errorCode_, codeLine_);
+        }
+
+    private:
+        const char_t* str_;
+        Cursor cur_;
+        int32_t proc_;
+        int32_t errorCode_;
+        int32_t codeLine_;
+
+    }; // class JsonBase::DecodeContext
 
     static bool decodeNull(DecodeContext& ctx, Value& value)
     {
@@ -2733,226 +2988,6 @@ private:
                 Error::UnknownProc, Error::UnexpectedToken,
                 __LINE__);
             return false;
-        }
-    }
-
-public:
-
-    static void encodeNull(EncodeContext& ctx)
-    {
-        ctx.getOutputStream() << 'n' << 'u' << 'l' << 'l';
-    }
-
-    static void encodeNumber(EncodeContext& ctx, int64_t number)
-    {
-        ctx.getOutputStream() << number;
-    }
-
-    static void encodeString(EncodeContext& ctx, const String& str)
-    {
-        ctx.writeEscape();
-        ctx.getOutputStream() << '\"';
-
-        for (size_t index = 0; index < str.size(); ++index)
-        {
-            char_t ch = str.at(index);
-
-            char_t escapePairCh = '\0';
-                
-            if (ch == '"')
-            {
-                escapePairCh = '\"';
-            }
-            else if (ch == '\\')
-            {
-                escapePairCh = '\\';
-            }
-            else if (ch == '/')
-            {
-                escapePairCh = '/';
-            }
-            else if (ch == '\b')
-            {
-                escapePairCh = 'b';
-            }
-            else if (ch == '\f')
-            {
-                escapePairCh = 'f';
-            }
-            else if (ch == '\n')
-            {
-                escapePairCh = 'n';
-            }
-            else if (ch == '\r')
-            {
-                escapePairCh = 'r';
-            }
-            else if (ch == '\t')
-            {
-                escapePairCh = 't';
-            }
-            else if (((uint32_t)ch < 0x20) || ((uint32_t)ch == 0x7f))
-            {
-                escapePairCh = 'u';
-            }
-            
-            if (escapePairCh != '\0')
-            {
-                ctx.writeEscape();
-                ctx.getOutputStream() << '\\' << escapePairCh;
-
-                if (escapePairCh == 'u')
-                {
-                    char_t str[5];
-                    str[0] = '0';
-                    str[1] = '0';
-                    encodeHex((uint32_t)((ch & 0xf0) >> 4), str[2]);
-                    encodeHex((uint32_t)((ch & 0x0f)), str[3]);
-                    str[4] = '\0';
-
-                    ctx.getOutputStream() << str;
-                }
-            }
-            else
-            {
-                ctx.getOutputStream() << ch;
-            }
-        }
-
-        ctx.writeEscape();
-        ctx.getOutputStream() << '\"';
-    }
-
-    static void encodeBoolean(EncodeContext& ctx, bool boolean)
-    {
-        if (boolean)
-        {
-            ctx.getOutputStream() << 't' << 'r' << 'u' << 'e';
-        }
-        else
-        {
-            ctx.getOutputStream() << 'f' << 'a' << 'l' << 's' << 'e';
-        }
-    }
-
-    static void encodeReal(EncodeContext& ctx, double real)
-    {
-        ctx.getOutputStream() << real;
-    }
-
-    static void encodeArray(EncodeContext& ctx, const Value& value)
-    {
-        JSONITY_ASSERT(value.isArray());
-
-        ctx.getOutputStream() << '[';
-
-        if (!value.isEmpty())
-        {
-            ctx.writeNewLine();
-            ctx.increaseIndent();
-
-            for (typename Array::const_iterator it =
-                    value.getArray().begin();
-                it != value.getArray().end();)
-            {
-                ctx.writeIndent();
-
-                encodeValue(ctx, *it);
-                ++it;
-
-                if (it != value.getArray().end())
-                {
-                    ctx.getOutputStream() << ',';
-                    ctx.writeNewLine();
-                }
-            }
-
-            ctx.writeNewLine();
-            ctx.decreaseIndent();
-            ctx.writeIndent();
-        }
-
-        ctx.getOutputStream() << ']';
-    }
-
-    static void encodeObject(EncodeContext& ctx, const Value& value)
-    {
-        JSONITY_ASSERT(value.isObject());
-
-        ctx.getOutputStream() << '{';
-
-        if (!value.isEmpty())
-        {
-            ctx.writeNewLine();
-            ctx.increaseIndent();
-
-            for (typename Object::const_iterator it =
-                    value.getObject().begin();
-                it != value.getObject().end();)
-            {
-                ctx.writeIndent();
-
-                encodeString(ctx, it->first);
-
-                ctx.getOutputStream() << ':';
-                ctx.writeSeparator();
-
-                encodeValue(ctx, it->second);
-
-                ++it;
-
-                if (it != value.getObject().end())
-                {
-                    ctx.getOutputStream() << ',';
-                    ctx.writeNewLine();
-                }
-            }
-
-            ctx.writeNewLine();
-            ctx.decreaseIndent();
-            ctx.writeIndent();
-        }
-
-        ctx.getOutputStream() << '}';
-    }
-
-    static void encodeValue(EncodeContext& ctx, const Value& value)
-    {
-        if (value.isNull())
-        {
-            encodeNull(ctx);
-        }
-        else if (value.isNumber())
-        {
-            encodeNumber(ctx, value.getNumber());
-        }
-        else if (value.isString())
-        {
-            encodeString(ctx, value.getString());
-        }
-        else if (value.isBoolean())
-        {
-            encodeBoolean(ctx, value.getBoolean());
-        }
-        else if (value.isReal())
-        {
-            encodeReal(ctx, value.getReal());
-        }
-        else if (value.isArray())
-        {
-            encodeArray(ctx, value);
-        }
-        else if (value.isObject())
-        {
-            encodeObject(ctx, value);
-        }
-        else if (value.isUserValue())
-        {
-            value.encodeUserValue(ctx);
-        }
-        else if (value.isUserValuePtr())
-        {
-            value.encodeUserValue(ctx);
         }
     }
 

@@ -5,6 +5,10 @@
 #include <set>
 #include <deque>
 
+#if !defined(_MSC_VER) || (_MSC_VER >= 1600)
+#include <array>
+#endif
+
 #include "jsonity.hpp"
 
 #ifdef WIN32
@@ -1070,6 +1074,60 @@ void test12()
     return;
 }
 
+void test13()
+{
+#if !defined(JSONITY_OS_WINDOWS) || (_MSC_VER >= 1600)
+
+    {
+        std::array<int, 3> arr;
+        arr[0] = 100;
+        arr[1] = 200;
+        arr[2] = 300;
+
+        std::string jsonStr;
+        Json::encode(arr, jsonStr);
+
+        JSONITY_ASSERT(jsonStr == "[100,200,300]");
+    }
+
+    {
+        Json::Object obj;
+
+        std::vector<int> vec(3);
+        vec[0] = 100;
+        vec[1] = 200;
+        vec[2] = 300;
+        obj["vec"] = vec;
+
+        std::list<int> list;
+        list.push_back(400);
+        list.push_back(500);
+        list.push_back(600);
+        obj["list"] = list;
+
+        std::set<int> set;
+        set.insert(700);
+        set.insert(800);
+        set.insert(900);
+        obj["set"] = set;
+
+        std::array<std::string, 3> arr;
+        arr[0] = "A00";
+        arr[1] = "B00";
+        arr[2] = "C00";
+
+        obj["arr"] = arr;
+
+        std::string jsonStr;
+        Json::encode(obj, jsonStr);
+
+        JSONITY_ASSERT(Json::equal(obj,
+            "{\"vec\":[100,200,300],\"list\":[400,500,600],\"set\":[700,800,900],\"arr\":[\"A00\",\"B00\",\"C00\"]}"));
+    }
+
+#endif
+}
+
 void example1_1()
 {
     std::string jsonStr1 =
@@ -1378,6 +1436,7 @@ int main(int, char**) {
     test10();
     test11();
     test12();
+    test13();
 
     example1_1();
     example1_2();
