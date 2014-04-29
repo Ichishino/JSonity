@@ -4,9 +4,10 @@ JSonity
 JSonity is JSON utility for C++
 
 ## Features
+* JSON Parsing and Serializing.
+* Serializing User Objects into JSON string.
+* Serializing STL (map, vector, list, ...) into JSON string directly.
 * One header file only.
-* Serializing User Objects into JSON String.
-* Serializing STL (map, vector, list, ...) into JSON String directly.
 * Simple easy interface.
 
 ## Examples
