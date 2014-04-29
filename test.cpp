@@ -992,9 +992,9 @@ public:
     }
 
     int getData1() const
-    {   return data1_;    }
+        {   return data1_;    }
     const std::string& getData2() const
-    {   return data2_;    }
+        {   return data2_;    }
 
 protected:
 

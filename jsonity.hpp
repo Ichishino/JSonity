@@ -39,6 +39,9 @@
 
 #if defined(_WINDOWS) || defined(_WIN32) || defined(_WIN64) 
 #define JSONITY_OS_WINDOWS
+#ifdef _MSC_VER
+#pragma warning (disable : 4503) // Disable truncated name warning
+#endif
 #endif
 
 #if !defined(JSONITY_OS_WINDOWS) || (_MSC_VER >= 1600)
@@ -83,10 +86,6 @@ typedef __int64 int64_t;
     template<typename ValueType, size_t Size> \
     Value& operator=(const type<ValueType, Size>& container) \
         {   setArray(container); return *this;  }
-
-#ifdef _MSC_VER
-#pragma warning (disable : 4503) // Disable truncated name warning
-#endif
 
 // namespace
 namespace jsonity {
@@ -225,34 +224,6 @@ public:
             assignReal(real);
         }
 
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::vector);
-
-#if defined(_LIST_) || defined(_GLIBCXX_LIST)
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::list);
-#endif
-
-#if defined(_DEQUE_) || defined(_GLIBCXX_DEQUE)
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::deque);
-#endif
-
-#if defined(_SET_) || defined(_GLIBCXX_SET)
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::set);
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::multiset);
-#endif
-
-#if defined(_ARRAY_) || defined(_GLIBCXX_ARRAY)
-        JSONITY_VALUE_IMPL_STL_CONTAINER_FIXED_SIZE(std::array);
-#endif
-
-#if defined(_FORWARD_LIST_) || defined(_GLIBCXX_FORWARD_LIST)
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::forward_list);
-#endif
-
-#if defined(_UNORDERED_SET_) || defined(_GLIBCXX_UNORDERED_SET)
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::unordered_set);
-        JSONITY_VALUE_IMPL_STL_CONTAINER(std::unordered_multiset);
-#endif
-
         template<typename KeyType, typename ValueType>
         Value(const std::map<KeyType, ValueType>& map)
         {
@@ -305,6 +276,30 @@ public:
 
             type_ = NullType;
         }
+
+    public:
+
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::vector);
+#if defined(_LIST_) || defined(_GLIBCXX_LIST)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::list);
+#endif
+#if defined(_DEQUE_) || defined(_GLIBCXX_DEQUE)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::deque);
+#endif
+#if defined(_SET_) || defined(_GLIBCXX_SET)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::set);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::multiset);
+#endif
+#if defined(_ARRAY_) || defined(_GLIBCXX_ARRAY)
+        JSONITY_VALUE_IMPL_STL_CONTAINER_FIXED_SIZE(std::array);
+#endif
+#if defined(_FORWARD_LIST_) || defined(_GLIBCXX_FORWARD_LIST)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::forward_list);
+#endif
+#if defined(_UNORDERED_SET_) || defined(_GLIBCXX_UNORDERED_SET)
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::unordered_set);
+        JSONITY_VALUE_IMPL_STL_CONTAINER(std::unordered_multiset);
+#endif
 
     public:
 
@@ -968,11 +963,11 @@ public:
 
             if (getSize() < map.size())
             {
-                return -static_cast<int64_t>(map.size() - getSize());
+                return -static_cast<int32_t>(map.size() - getSize());
             }
             else if (getSize() > map.size())
             {
-                return static_cast<int64_t>(getSize() - map.size());
+                return static_cast<int32_t>(getSize() - map.size());
             }
 
             for (typename std::map<KeyType, ValueType>::
@@ -1333,14 +1328,7 @@ public:
         }
 
     private:
-        void encodeUserValue(EncodeContext& ctx) const
-        {
-            JSONITY_ASSERT(
-                isUserValue() || isUserValuePtr());
-            data_.user_->encode(ctx);
-        }
 
-    private:
         const UserValueBase& getUserValueBase() const
         {
             JSONITY_TYPE_CHECK(isUserValue());
@@ -1351,6 +1339,13 @@ public:
         {
             JSONITY_TYPE_CHECK(isUserValuePtr());
             return data_.user_;
+        }
+
+        void encodeUserValue(EncodeContext& ctx) const
+        {
+            JSONITY_ASSERT(
+                isUserValue() || isUserValuePtr());
+            data_.user_->encode(ctx);
         }
 
     private:
