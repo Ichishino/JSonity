@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.0.1
+  JSonity : JSON Utility for C++   Version 1.0.2
 
   Copyright (c) 2014, Ichishino
 
@@ -280,23 +280,25 @@ public:
     public:
 
         JSONITY_VALUE_IMPL_STL_CONTAINER(std::vector);
-#if defined(_LIST_) || defined(_GLIBCXX_LIST)
+#if defined(_LIST_) || defined(_GLIBCXX_LIST) || defined(_LIBCPP_LIST)
         JSONITY_VALUE_IMPL_STL_CONTAINER(std::list);
 #endif
-#if defined(_DEQUE_) || defined(_GLIBCXX_DEQUE)
+#if defined(_DEQUE_) || defined(_GLIBCXX_DEQUE) || defined(_LIBCPP_DEQUE)
         JSONITY_VALUE_IMPL_STL_CONTAINER(std::deque);
 #endif
-#if defined(_SET_) || defined(_GLIBCXX_SET)
+#if defined(_SET_) || defined(_GLIBCXX_SET) || defined(_LIBCPP_SET)
         JSONITY_VALUE_IMPL_STL_CONTAINER(std::set);
         JSONITY_VALUE_IMPL_STL_CONTAINER(std::multiset);
 #endif
-#if defined(_ARRAY_) || defined(_GLIBCXX_ARRAY)
+#if defined(_ARRAY_) || defined(_GLIBCXX_ARRAY) || defined(_LIBCPP_ARRAY)
         JSONITY_VALUE_IMPL_STL_CONTAINER_FIXED_SIZE(std::array);
 #endif
-#if defined(_FORWARD_LIST_) || defined(_GLIBCXX_FORWARD_LIST)
+#if defined(_FORWARD_LIST_) || defined(_GLIBCXX_FORWARD_LIST) || \
+    defined(_LIBCPP_FORWARD_LIST)
         JSONITY_VALUE_IMPL_STL_CONTAINER(std::forward_list);
 #endif
-#if defined(_UNORDERED_SET_) || defined(_GLIBCXX_UNORDERED_SET)
+#if defined(_UNORDERED_SET_) || defined(_GLIBCXX_UNORDERED_SET) || \
+    defined(_LIBCPP_UNORDERED_SET)
         JSONITY_VALUE_IMPL_STL_CONTAINER(std::unordered_set);
         JSONITY_VALUE_IMPL_STL_CONTAINER(std::unordered_multiset);
 #endif
