@@ -1181,6 +1181,58 @@ void test13()
 #endif
 }
 
+// User Object
+class MyData2 : public Json::UserValue<MyData2>
+{
+public:
+    MyData2()
+    {
+    }
+    MyData2(const std::vector<std::string>& data)
+    {
+        data_ = data;
+    }
+    MyData2(const MyData2& other)
+    {
+        data_ = other.data_;
+    }
+    ~MyData2()
+    {
+    }
+
+protected:
+
+    // Encode
+    virtual void encode(Json::EncodeContext& ctx) const
+    {
+        Json::encodeArray(ctx, data_);
+    }
+
+private:
+    std::vector<std::string> data_;
+};
+
+void test14()
+{
+    {
+        std::map<int, MyData2> map;
+
+        std::vector<std::string> vec(3);
+        vec[0] = "TEST1";
+        vec[1] = "TEST2";
+        vec[2] = "TEST3";
+
+        MyData2 myData(vec);
+
+        map[100] = myData;
+
+        std::string jsonStr;
+        Json::encode(map, jsonStr);
+
+        return ;
+    }
+}
+
 void example1_1()
 {
     std::string jsonStr1 =
@@ -1389,6 +1441,24 @@ void example2_4()
 
 void example2_5()
 {
+    std::vector<int> list;  // any STL type (map, vector, list, set, ...)
+
+    list.push_back(100);
+    list.push_back(200);
+    list.push_back(300);
+
+    std::string jsonStr;
+    Json::encode(list, jsonStr);  // serialize
+
+    // jsonStr == [100,200,300]
+
+    JSONITY_ASSERT(jsonStr == "[100,200,300]");
+
+    return;
+}
+
+void example2_6()
+{
     std::map<std::string, std::vector<int> > map;
 
     std::vector<int> vec(3);
@@ -1490,6 +1560,7 @@ int main(int, char**) {
     test11();
     test12();
     test13();
+    test14();
 
     example1_1();
     example1_2();
@@ -1499,6 +1570,7 @@ int main(int, char**) {
     example2_3();
     example2_4();
     example2_5();
+    example2_6();
 
     example3_1();
     example3_2();

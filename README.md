@@ -245,6 +245,22 @@ Json::encode(map, jsonStr);  // serialize
 ```c++
 // example2_5
 
+std::vector<int> list;  // any STL type (map, vector, list, set, ...)
+
+list.push_back(100);
+list.push_back(200);
+list.push_back(300);
+
+std::string jsonStr;
+Json::encode(list, jsonStr);  // serialize
+
+// jsonStr == [100,200,300]
+
+```
+
+```c++
+// example2_6
+
 std::map<std::string, std::vector<int> > map;
 
 std::vector<int> vec(3);

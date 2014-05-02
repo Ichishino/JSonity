@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.0.2
+  JSonity : JSON Utility for C++   Version 1.0.3
 
   Copyright (c) 2014, Ichishino
 
@@ -2072,70 +2072,82 @@ public:
         ctx.writeEscape();
         ctx.getOutputStream() << '\"';
 
-        for (size_t index = 0; index < str.size(); ++index)
-        {
-            char_t ch = str.at(index);
+        const char_t* cur = str.c_str();
+        const char_t* head = cur;
 
+        while ((*cur) != '\0')
+        {
             char_t escapePairCh = '\0';
 
-            if (ch == '"')
+            if ((*cur) == '"')
             {
                 escapePairCh = '\"';
             }
-            else if (ch == '\\')
+            else if ((*cur) == '\\')
             {
                 escapePairCh = '\\';
             }
-            else if (ch == '/')
+            else if ((*cur) == '/')
             {
                 escapePairCh = '/';
             }
-            else if (ch == '\b')
+            else if ((*cur) == '\b')
             {
                 escapePairCh = 'b';
             }
-            else if (ch == '\f')
+            else if ((*cur) == '\f')
             {
                 escapePairCh = 'f';
             }
-            else if (ch == '\n')
+            else if ((*cur) == '\n')
             {
                 escapePairCh = 'n';
             }
-            else if (ch == '\r')
+            else if ((*cur) == '\r')
             {
                 escapePairCh = 'r';
             }
-            else if (ch == '\t')
+            else if ((*cur) == '\t')
             {
                 escapePairCh = 't';
             }
-            else if (((uint32_t)ch < 0x20) || ((uint32_t)ch == 0x7f))
+            else if (((uint32_t)(*cur) < 0x20) || ((uint32_t)(*cur) == 0x7f))
             {
                 escapePairCh = 'u';
             }
 
             if (escapePairCh != '\0')
             {
+                ctx.getOutputStream().write(head, (cur - head));
+
                 ctx.writeEscape();
                 ctx.getOutputStream() << '\\' << escapePairCh;
 
                 if (escapePairCh == 'u')
                 {
-                    char_t str[5];
-                    str[0] = '0';
-                    str[1] = '0';
-                    encodeHex((uint32_t)((ch & 0xf0) >> 4), str[2]);
-                    encodeHex((uint32_t)((ch & 0x0f)), str[3]);
-                    str[4] = '\0';
+                    char_t hexStr[5];
+                    hexStr[0] = '0';
+                    hexStr[1] = '0';
+                    encodeHex((uint32_t)(((*cur) & 0xf0) >> 4), hexStr[2]);
+                    encodeHex((uint32_t)(((*cur) & 0x0f)), hexStr[3]);
+                    hexStr[4] = '\0';
 
-                    ctx.getOutputStream() << str;
+                    ctx.getOutputStream() << hexStr;
                 }
+
+                ++cur;
+                head = cur;
             }
             else
             {
-                ctx.getOutputStream() << ch;
+                ++cur;
             }
+        }
+
+        size_t size = cur - head;
+        if (size > 0)
+        {
+            ctx.getOutputStream().write(head, size);
         }
 
         ctx.writeEscape();
