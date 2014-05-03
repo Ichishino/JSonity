@@ -1233,6 +1233,34 @@ void test14()
     }
 }
 
+void test15()
+{
+    {
+        std::string jsonStr =
+            "{\n"
+                "\"test1\" : 100\n"
+                "\"test2\" : 200\n"
+            "}";
+
+        Json::Value v;
+        Json::Error err;
+
+        if (!Json::decode(jsonStr, v, &err))
+        {
+            printf("parse error: [%d]\n",
+                err.getCursor().getPos() + 1);
+
+            printf("parse error: (%d:%d)\n",
+                err.getCursor().getRow() + 1,
+                err.getCursor().getCol() + 1);
+
+            JSONITY_ASSERT(err.getCursor().getPos() == 16);
+            JSONITY_ASSERT(err.getCursor().getRow() == 2);
+            JSONITY_ASSERT(err.getCursor().getCol() == 0);
+        }
+    }
+}
+
 void example1_1()
 {
     std::string jsonStr1 =
@@ -1561,6 +1589,7 @@ int main(int, char**) {
     test12();
     test13();
     test14();
+    test15();
 
     example1_1();
     example1_2();

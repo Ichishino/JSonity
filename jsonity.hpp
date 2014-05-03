@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.0.3
+  JSonity : JSON Utility for C++   Version 1.0.4
 
   Copyright (c) 2014, Ichishino
 
@@ -113,14 +113,11 @@ public:
     // String
     typedef std::basic_string<char_t> String;
 
-    // Name
-    typedef String Name;
-
     // Array
     typedef std::vector<Value> Array;
 
     // Object
-    typedef std::map<Name, Value> Object;
+    typedef std::map<String, Value> Object;
 
     typedef std::basic_istringstream<
         char_t, std::char_traits<char_t>,
@@ -787,7 +784,7 @@ public:
             return getObject()[name];
         }
 
-        Value& operator[](const Name& name)
+        Value& operator[](const String& name)
         {
             JSONITY_TYPE_CHECK(isObject());
             return getObject()[name];
@@ -1990,7 +1987,7 @@ public:
 public:
 
     //-----------------------------------------------------------------------//
-    // JsonBase Interfaces
+    // JsonBase public methods
     //-----------------------------------------------------------------------//
 
     // Decode
@@ -2111,14 +2108,16 @@ public:
             {
                 escapePairCh = 't';
             }
-            else if (((uint32_t)(*cur) < 0x20) || ((uint32_t)(*cur) == 0x7f))
+            else if (((uint32_t)(*cur) < 0x20) ||
+                     ((uint32_t)(*cur) == 0x7f))
             {
                 escapePairCh = 'u';
             }
 
             if (escapePairCh != '\0')
             {
-                ctx.getOutputStream().write(head, (cur - head));
+                ctx.getOutputStream().write(
+                    head, static_cast<size_t>(cur - head));
 
                 ctx.writeEscape();
                 ctx.getOutputStream() << '\\' << escapePairCh;
@@ -2144,7 +2143,7 @@ public:
             }
         }
 
-        size_t size = cur - head;
+        size_t size = static_cast<size_t>(cur - head);
         if (size > 0)
         {
             ctx.getOutputStream().write(head, size);
@@ -2345,7 +2344,7 @@ private:
                 else if (getCurrentChar() == '\n')
                 {
                     cur_.nextRow();
-                    nextChar();
+                    cur_.nextPos();
                     continue;
                 }
                 break;
