@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.0.4
+  JSonity : JSON Utility for C++   Version 1.0.5
 
   Copyright (c) 2014, Ichishino
 
@@ -44,7 +44,11 @@
 #endif
 #endif
 
-#if !defined(JSONITY_OS_WINDOWS) || (_MSC_VER >= 1600)
+#if !defined(JSONITY_OS_WINDOWS) || (_MSC_VER >= 1600) // TODO
+#define JSONITY_SUPPORT_CXX_11
+#endif
+
+#ifdef JSONITY_SUPPORT_CXX_11
 #include <cstdint>
 #else
 typedef int int32_t; 
@@ -98,9 +102,9 @@ template<typename CharType> class JsonBase
 {
 public:
     template<typename UserValueType> class UserValue;
+    class Value;
     class Cursor;
     class Error;
-    class Value;
     class Exception;
     class TypeMismatchException;
     class EncodeStyle;
@@ -126,11 +130,7 @@ public:
         char_t, std::char_traits<char_t>,
         std::allocator<char_t> > OSStream;
 
-public:
-
-    //-----------------------------------------------------------------------//
-    // JsonBase::UserValue
-    //-----------------------------------------------------------------------//
+private:
 
     class UserValueBase
     {
@@ -149,6 +149,12 @@ public:
         friend class Value;
     };
 
+public:
+
+    //-----------------------------------------------------------------------//
+    // JsonBase::UserValue
+    //-----------------------------------------------------------------------//
+
     template<typename UserValueType>
     class UserValue : public UserValueBase
     {
@@ -165,8 +171,6 @@ public:
                 (const UserValueType&)*this);
         }
     };
-
-public:
 
     //-----------------------------------------------------------------------//
     // JsonBase::Value
@@ -242,6 +246,14 @@ public:
             type_ = NullType;
             assignValue(other);
         }
+
+#ifdef JSONITY_SUPPORT_CXX_11
+        Value(Value&& other)
+        {
+            type_ = NullType;
+            move(std::move(other));
+        }
+#endif
 
         ~Value()
         {
@@ -713,8 +725,11 @@ public:
         Value& addNewValue()
         {
             JSONITY_TYPE_CHECK(isArray());
-
+#ifdef JSONITY_SUPPORT_CXX_11
+            getArray().emplace_back(Value());
+#else
             getArray().push_back(Value());
+#endif
             return getArray().back();
         }
 
@@ -1104,11 +1119,19 @@ public:
             return *this;
         }
 
-        Value& operator=(const Value& value)
+        Value& operator=(const Value& other)
         {
-            setValue(value);
+            setValue(other);
             return *this;
         }
+
+#ifdef JSONITY_SUPPORT_CXX_11
+        Value& operator=(Value&& other)
+        {
+            move(std::move(other));
+            return *this;
+        }
+#endif
 
     public:
 
@@ -1471,6 +1494,16 @@ public:
             }
         }
 
+#ifdef JSONITY_SUPPORT_CXX_11
+        void move(Value&& other)
+        {
+            destroy();
+            type_ = other.type_;
+            data_ = other.data_;
+            other.type_ = NullType;
+        }
+#endif
+
         void addString(const char_t* str, size_t length)
         {
             JSONITY_ASSERT(isString());
@@ -1519,17 +1552,17 @@ public:
         }
 
     public:
-        size_t getPos() const
+        uint32_t getPos() const
         {
             return pos_;
         }
 
-        size_t getRow() const
+        uint32_t getRow() const
         {
             return row_;
         }
 
-        size_t getCol() const
+        uint32_t getCol() const
         {
             return col_;
         }
@@ -1558,9 +1591,9 @@ public:
             col_ = 0;
         }
 
-        size_t pos_;
-        size_t row_;
-        size_t col_;
+        uint32_t pos_;
+        uint32_t row_;
+        uint32_t col_;
 
         friend class JsonBase;
 

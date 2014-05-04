@@ -26,6 +26,10 @@
 
 using namespace jsonity;
 
+#ifdef JSONITY_TEST_UNICODE
+#include "test_unicode.h"
+#endif
+
 static const std::string jstr1 = 
 "{"
     "\"name1\" : 12345678, \n"
@@ -653,6 +657,20 @@ void test7()
             &error) && error.isEmpty());
     }
 
+    {
+        Json::Value v;
+        JSONITY_ASSERT(Json::decode("\"\\u0019\\u0018\\u007f\"", v));
+
+        JSONITY_ASSERT(v.getString()[0] == 0x19);
+        JSONITY_ASSERT(v.getString()[1] == 0x18);
+        JSONITY_ASSERT(v.getString()[2] == 0x7f);
+
+        std::string jsonStr;
+        Json::encode(v, jsonStr);
+
+        JSONITY_ASSERT(Json::equal(v, jsonStr));
+    }
+
     return;
 }
 
@@ -1078,7 +1096,7 @@ void test12()
 
 void test13()
 {
-#if !defined(JSONITY_OS_WINDOWS) || (_MSC_VER >= 1600)
+#ifdef JSONITY_SUPPORT_CXX_11
 
     {
         std::array<int, 3> arr;
@@ -1357,6 +1375,17 @@ void example1_2()
     JSONITY_ASSERT(b == true);
     JSONITY_ASSERT(n == 600);
 
+    std::list<Json::Value> listVal;
+    v.findRecursive("subdata1", listVal);
+
+    JSONITY_ASSERT(listVal.size() == 1);
+
+    Json::Value& v2 = *listVal.begin();
+
+    n = v2[0]; // 600
+
+    JSONITY_ASSERT(n == 600);
+
     return;
 }
 
@@ -1575,6 +1604,10 @@ int _tmain(int, _TCHAR**) {
 int main(int, char**) {
 #endif
 
+#ifdef JSONITY_SUPPORT_CXX_11
+    printf("c++11\n");
+#endif
+
     test1();
     test2();
     test3();
@@ -1590,6 +1623,10 @@ int main(int, char**) {
     test13();
     test14();
     test15();
+
+#ifdef JSONITY_TEST_UNICODE
+    test_unicode();
+#endif
 
     example1_1();
     example1_2();
