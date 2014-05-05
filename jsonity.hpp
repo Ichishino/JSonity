@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.0.5
+  JSonity : JSON Utility for C++   Version 1.0.6
 
   Copyright (c) 2014, Ichishino
 
@@ -98,7 +98,9 @@ namespace jsonity {
 // JsonBase
 //---------------------------------------------------------------------------//
 
-template<typename CharType> class JsonBase
+template<typename CharType,
+         typename CharTraitsType = std::char_traits<CharType> >
+class JsonBase
 {
 public:
     template<typename UserValueType> class UserValue;
@@ -112,10 +114,11 @@ public:
 
 public:
 
+    // basic char
     typedef CharType char_t;
 
     // String
-    typedef std::basic_string<char_t> String;
+    typedef std::basic_string<CharType, CharTraitsType> String;
 
     // Array
     typedef std::vector<Value> Array;
@@ -123,12 +126,15 @@ public:
     // Object
     typedef std::map<String, Value> Object;
 
+    // Stream
+    typedef std::basic_ostream<
+        CharType, CharTraitsType > OStream;
     typedef std::basic_istringstream<
-        char_t, std::char_traits<char_t>,
-        std::allocator<char_t> > ISStream;
+        CharType, CharTraitsType,
+        std::allocator<CharType> > ISStream;
     typedef std::basic_ostringstream<
-        char_t, std::char_traits<char_t>,
-        std::allocator<char_t> > OSStream;
+        CharType, CharTraitsType,
+        std::allocator<CharType> > OSStream;
 
 private:
 
@@ -137,14 +143,12 @@ private:
     public:
         virtual ~UserValueBase() {}
 
-    public:
-        virtual void encode(EncodeContext& ctx) const = 0;
-
     protected:
         UserValueBase() {}
 
     private:
         virtual UserValueBase* duplicate() const = 0;
+        virtual void encode(EncodeContext& ctx) const = 0;
 
         friend class Value;
     };
@@ -163,6 +167,9 @@ public:
 
     protected:
         UserValue() {}
+
+        // Encode
+        virtual void encode(EncodeContext& ctx) const = 0;
 
     private:
         UserValueBase* duplicate() const
@@ -1548,13 +1555,20 @@ public:
     public:
         Cursor()
         {
+            orig_ = NULL;
+            reset();
+        }
+
+        Cursor(const char_t* str)
+        {
+            orig_ = str;
             reset();
         }
 
     public:
         uint32_t getPos() const
         {
-            return pos_;
+            return static_cast<uint32_t>(cur_ - orig_);
         }
 
         uint32_t getRow() const
@@ -1568,9 +1582,14 @@ public:
         }
 
     private:
+        const char_t* getCur() const
+        {
+            return cur_;
+        }
+
         void nextPos()
         {
-            ++pos_;
+            ++cur_;
         }
 
         void nextRow()
@@ -1586,12 +1605,13 @@ public:
 
         void reset()
         {
-            pos_ = 0;
+            cur_ = orig_;
             row_ = 0;
             col_ = 0;
         }
 
-        uint32_t pos_;
+        const char_t* orig_;
+        const char_t* cur_;
         uint32_t row_;
         uint32_t col_;
 
@@ -1907,13 +1927,8 @@ public:
     class EncodeContext
     {
     public:
-        EncodeContext()
-        {
-            indent_ = 0;
-            style_ = NULL;
-        }
-
-        EncodeContext(const EncodeStyle* style)
+        EncodeContext(OStream& os, const EncodeStyle* style = NULL)
+            : os_(os)
         {
             indent_ = 0;
             style_ = style;
@@ -1996,14 +2011,9 @@ public:
         }
 
     public:
-        OSStream& getOutputStream()
+        OStream& getOutputStream()
         {
-            return oss_;
-        }
-
-        void getString(String& str) const
-        {
-            str = oss_.str();
+            return os_;
         }
 
     protected:
@@ -2011,7 +2021,7 @@ public:
 		EncodeContext& operator=(const EncodeContext&);
 
 	private:
-        OSStream oss_;
+        OStream& os_;
         size_t indent_;
         const EncodeStyle* style_;
 
@@ -2024,10 +2034,11 @@ public:
     //-----------------------------------------------------------------------//
 
     // Decode
-    static bool decode(const String& jsonString, Value& value,
+
+    static bool decode(const String& jsonStr, Value& value,
                        Error* error = NULL)
     {
-        DecodeContext ctx(jsonString);
+        DecodeContext ctx(jsonStr);
 
         if (!decodeValue(ctx, value))
         {
@@ -2042,33 +2053,43 @@ public:
         return true;
     }
 
+
     // Encode
-    static void encode(const Value& value, String& jsonStr,
+
+    static void encode(const Value& value, OStream& os,
                        const EncodeStyle* style = NULL)
     {
         if (style == NULL)
         {
-            UnreadableEncodeContext ctx;
+            UnreadableEncodeContext ctx(os);
             encodeValue(ctx, value);
-            ctx.getString(jsonStr);
         }
         else
         {
-            EncodeContext ctx(style);
+            EncodeContext ctx(os, style);
             ctx.writeIndent();
             encodeValue(ctx, value);
             ctx.writeNewLine();
-            ctx.getString(jsonStr);
         }
     }
 
+    static void encode(const Value& value, String& jsonStr,
+                       const EncodeStyle* style = NULL)
+    {
+        OSStream oss;
+        encode(value, oss, style);
+        jsonStr = oss.str();
+    }
+
+
     // Equal
-    static bool equal(const Value& value, const String& jsonString,
+
+    static bool equal(const Value& value, const String& jsonStr,
                       bool ignoreOrder = true, Error* error = NULL)
     {
         Value jsonValue;
      
-        if (!decode(jsonString, jsonValue, error))
+        if (!decode(jsonStr, jsonValue, error))
         {
             return false;
         }
@@ -2324,6 +2345,12 @@ private:
     class UnreadableEncodeContext : public EncodeContext
     {
     public:
+        UnreadableEncodeContext(OStream& os)
+            : EncodeContext(os)
+        {
+        }
+
+    public:
         void increaseIndent() {}
         void decreaseIndent() {}
         void writeIndent() {}
@@ -2336,20 +2363,20 @@ private:
     {
     public:
         DecodeContext(const String& str)
+            : cur_(str.c_str())
         {
-            str_ = str.c_str();
             reset();
         }
 
     public:
-        char_t getCurrentChar() const
+        const char_t* getCurrentAddress() const
         {
-            return str_[cur_.getPos()];
+            return cur_.getCur();
         }
 
-        const char_t* getCurrentHead() const
+        char_t getCurrentChar() const
         {
-            return &str_[cur_.getPos()];
+            return *getCurrentAddress();
         }
 
         void nextChar()
@@ -2406,7 +2433,6 @@ private:
         }
 
     private:
-        const char_t* str_;
         Cursor cur_;
         int32_t proc_;
         int32_t errorCode_;
@@ -2454,7 +2480,7 @@ private:
                         (ctx.getCurrentChar() <= '9')) ||
                         (ctx.getCurrentChar() == '-'));
 
-        const char_t* head = ctx.getCurrentHead();
+        const char_t* head = ctx.getCurrentAddress();
 
         if (ctx.getCurrentChar() == '-')
         {
@@ -2485,7 +2511,7 @@ private:
             }
         }
 
-        if (ctx.getCurrentHead() == head)
+        if (ctx.getCurrentAddress() == head)
         {
             ctx.setError(
                 Error::NumberProc, Error::UnexpectedToken,
@@ -2495,7 +2521,7 @@ private:
 
         String str;
         str.assign(head,
-            static_cast<size_t>(ctx.getCurrentHead() - head));
+            static_cast<size_t>(ctx.getCurrentAddress() - head));
 
         ISStream iss(str);
         if (real)
@@ -2715,7 +2741,7 @@ private:
 
         value = String();
         bool escape = false;
-        const char_t* head = ctx.getCurrentHead();
+        const char_t* head = ctx.getCurrentAddress();
 
         for (;;)
         {
@@ -2737,7 +2763,7 @@ private:
                 if (ctx.getCurrentChar() == '\\')
                 {
                     value.addString(head,
-                        static_cast<size_t>(ctx.getCurrentHead() - head));
+                        static_cast<size_t>(ctx.getCurrentAddress() - head));
                     escape = true;
                 }
 
@@ -2751,12 +2777,12 @@ private:
                 }
 
                 escape = false;
-                head = ctx.getCurrentHead();
+                head = ctx.getCurrentAddress();
             }
         }
 
         size_t size =
-            static_cast<size_t>(ctx.getCurrentHead() - head);
+            static_cast<size_t>(ctx.getCurrentAddress() - head);
         if (size > 0)
         {
             value.addString(head, size);
