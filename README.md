@@ -7,6 +7,8 @@ JSonity is JSON utility for C++
 * JSON Parsing and Serializing.
 * Serializing User Objects into JSON string.
 * Serializing STL (map, vector, list, ...) into JSON string directly.
+* Support Unicode (wchar_t).
+* Support I/O stream interface.
 * One header file only.
 * Simple easy interface.
 
@@ -30,7 +32,7 @@ using namespace jsonity;
 ```c++
 // example1_1
 
-std::string jsonStr1 =
+std::string jsonStr =
     "{"
         "\"name1\": 100,"
         "\"name2\": true,"
@@ -43,7 +45,7 @@ std::string jsonStr1 =
     "}";
 
 Json::Value v;
-Json::decode(jsonStr1, v);   // parse
+Json::decode(jsonStr, v);   // parse
 
 size_t size = v.getSize();  // 4
 
@@ -80,7 +82,53 @@ catch (const Json::TypeMismatchException&)
 ```c++
 // example1_2
 
-std::string jsonStr2 =
+std::string jsonStr = "{ ... }";
+
+Json::Error err;	// error info
+Json::Value v;
+
+if (!Json::decode(jsonStr, v, &err))	// parse
+{
+	// error
+
+	printf("Index: %d\n",
+		err.getCursor().getPos() + 1);
+
+	printf("Line: %d Col: %d\n",
+		err.getCursor().getRow() + 1,
+		err.getCursor().getCol() + 1);
+}
+
+```
+
+```c++
+// example1_3
+
+std::ifstream ifs("json.dat", std::ios::in | std::ios::binary);
+
+Json::Value v;
+Json::decode(ifs, v);   // parse
+```
+
+```c++
+// example1_4
+
+std::ifstream ifs("json.dat", std::ios::in | std::ios::binary);
+
+Json::Value v;
+ifs >> v;         // parse
+
+if (!ifs)
+{
+	// error
+}
+
+```
+
+```c++
+// example1_5
+
+std::string jsonStr =
     "{"
         "\"name1\": {"
             "\"data1\": ["
@@ -97,12 +145,20 @@ std::string jsonStr2 =
     "}";
 
 Json::Value v;
-Json::decode(jsonStr2, v);   // parse
+Json::decode(jsonStr, v);   // parse
 
 double d = v["name1"]["data1"][0];    // -3.14
 const std::string& str = v["name1"]["data1"][1]; // "aaaa"
 bool b = v["name1"]["data1"][2];      // "true"
 int n = v["name1"]["data1"][3]["subdata1"][0];  // 600
+
+std::list<Json::Value> listVal;
+v.findRecursive("subdata1", listVal);	// find recursively
+
+Json::Value& v2 = *listVal.begin();
+
+n = v2[0]; // 600
+
 ```
 
 #### Serialize object to JSON string
@@ -148,6 +204,29 @@ Json::encode(root_obj, jsonStr);  // serialize
 
 ```c++
 // example2_2
+
+Json::Object root_obj;
+
+...
+
+std::ofstream ofs("json.dat",
+	std::ios::out | std::ios::binary | std::ios::trunc);
+
+Json::encode(root_obj, ofs);  // serialize (redirect)
+```
+
+```c++
+// example2_3
+
+Json::Object root_obj;
+
+...
+
+std::cout << root_obj << std::endl;  // serialize (redirect)
+```
+
+```c++
+// example2_4
 
 // User Object
 class MyData : public Json::UserValue<MyData>
@@ -208,7 +287,7 @@ delete myDataPtr;
 ```
 
 ```c++
-// example2_3
+// example2_5
 
 std::map<std::string, std::string> map;  // any STL type (map, vector, list, set, ...)
 
@@ -223,7 +302,7 @@ Json::encode(map, jsonStr);  // serialize
 ```
 
 ```c++
-// example2_4
+// example2_6
 
 std::map<std::string, std::list<MyData> > map;  // any STL type (map, vector, list, set, ...)
 
@@ -243,7 +322,7 @@ Json::encode(map, jsonStr);  // serialize
 ```
 
 ```c++
-// example2_5
+// example2_7
 
 std::vector<int> list;  // any STL type (map, vector, list, set, ...)
 
@@ -259,7 +338,7 @@ Json::encode(list, jsonStr);  // serialize
 ```
 
 ```c++
-// example2_6
+// example2_8
 
 std::map<std::string, std::vector<int> > map;
 

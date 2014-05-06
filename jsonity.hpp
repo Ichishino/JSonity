@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.0.6
+  JSonity : JSON Utility for C++   Version 1.1.0
 
   Copyright (c) 2014, Ichishino
 
@@ -91,6 +91,16 @@ typedef __int64 int64_t;
     Value& operator=(const type<ValueType, Size>& container) \
         {   setArray(container); return *this;  }
 
+#define JSONITY_VALUE_OPERATOR_IOSTREAM(JsonType) \
+    inline JsonType::IStream& operator>>( \
+        JsonType::IStream& is, JsonType::Value& value) \
+        {   if (!JsonType::decode(is, value)) \
+                {   is.setstate(std::ios::failbit); } \
+            return is;  } \
+    inline JsonType::OStream& operator<<( \
+        JsonType::OStream& os, const JsonType::Value& value) \
+        {   JsonType::encode(value, os); return os; }
+
 // namespace
 namespace jsonity {
 
@@ -99,7 +109,8 @@ namespace jsonity {
 //---------------------------------------------------------------------------//
 
 template<typename CharType,
-         typename CharTraitsType = std::char_traits<CharType> >
+         typename CharTraitsType = std::char_traits<CharType>,
+         typename CharAllocatorType = std::allocator<CharType> >
 class JsonBase
 {
 public:
@@ -118,7 +129,8 @@ public:
     typedef CharType char_t;
 
     // String
-    typedef std::basic_string<CharType, CharTraitsType> String;
+    typedef std::basic_string<
+        CharType, CharTraitsType, CharAllocatorType> String;
 
     // Array
     typedef std::vector<Value> Array;
@@ -127,14 +139,16 @@ public:
     typedef std::map<String, Value> Object;
 
     // Stream
+    typedef std::basic_istream<
+        CharType, CharTraitsType > IStream;
     typedef std::basic_ostream<
         CharType, CharTraitsType > OStream;
     typedef std::basic_istringstream<
         CharType, CharTraitsType,
-        std::allocator<CharType> > ISStream;
+        CharAllocatorType > IStringStream;
     typedef std::basic_ostringstream<
         CharType, CharTraitsType,
-        std::allocator<CharType> > OSStream;
+        CharAllocatorType > OStringStream;
 
 private:
 
@@ -670,7 +684,7 @@ public:
         {
             if (isString())
             {
-                ISStream iss(getString());
+                IStringStream iss(getString());
                 int64_t number = 0;
                 iss >> number;
                 JSONITY_TYPE_CHECK(!iss.fail());
@@ -690,19 +704,19 @@ public:
         {
             if (isNumber())
             {
-                OSStream oss;
+                OStringStream oss;
                 oss << getNumber();
                 return oss.str();
             }
             else if (isReal())
             {
-                OSStream oss;
+                OStringStream oss;
                 oss << getReal();
                 return oss.str();
             }
             else if (isBoolean())
             {
-                OSStream oss;
+                OStringStream oss;
                 oss << getBoolean();
                 return oss.str();
             }
@@ -995,7 +1009,7 @@ public:
                     const_iterator itOther = map.begin();
                 itOther != map.end(); ++itOther)
             {
-                OSStream oss;
+                OStringStream oss;
                 oss << itOther->first;
 
                 typename Object::const_iterator it =
@@ -1439,7 +1453,7 @@ public:
                     map.begin();
                 it != map.end(); ++it)
             {
-                OSStream oss;
+                OStringStream oss;
                 oss << it->first;
                 if (oss.fail())
                 {
@@ -1511,23 +1525,6 @@ public:
         }
 #endif
 
-        void addString(const char_t* str, size_t length)
-        {
-            JSONITY_ASSERT(isString());
-
-            if (length > 0)
-            {
-                getString().append(str, length);
-            }
-        }
-
-        void addChar(char_t ch)
-        {
-            JSONITY_ASSERT(isString());
-
-            getString().push_back(ch);
-        }
-
     private:
         Type type_;
         union Data {
@@ -1555,20 +1552,15 @@ public:
     public:
         Cursor()
         {
-            orig_ = NULL;
-            reset();
-        }
-
-        Cursor(const char_t* str)
-        {
-            orig_ = str;
-            reset();
+            pos_ = 0;
+            row_ = 0;
+            col_ = 0;
         }
 
     public:
         uint32_t getPos() const
         {
-            return static_cast<uint32_t>(cur_ - orig_);
+            return pos_;
         }
 
         uint32_t getRow() const
@@ -1582,16 +1574,6 @@ public:
         }
 
     private:
-        const char_t* getCur() const
-        {
-            return cur_;
-        }
-
-        void nextPos()
-        {
-            ++cur_;
-        }
-
         void nextRow()
         {
             ++row_;
@@ -1603,15 +1585,12 @@ public:
             ++col_;
         }
 
-        void reset()
+        void setPos(uint32_t pos)
         {
-            cur_ = orig_;
-            row_ = 0;
-            col_ = 0;
+            pos_ = pos;
         }
 
-        const char_t* orig_;
-        const char_t* cur_;
+        uint32_t pos_;
         uint32_t row_;
         uint32_t col_;
 
@@ -2035,10 +2014,10 @@ public:
 
     // Decode
 
-    static bool decode(const String& jsonStr, Value& value,
+    static bool decode(IStream& is, Value& value,
                        Error* error = NULL)
     {
-        DecodeContext ctx(jsonStr);
+        StreamDecodeContext ctx(is);
 
         if (!decodeValue(ctx, value))
         {
@@ -2051,6 +2030,29 @@ public:
         }
 
         return true;
+    }
+
+    static bool decode(const char_t* jsonStr, Value& value,
+                       Error* error = NULL)
+    {
+        StringDecodeContext ctx(jsonStr);
+
+        if (!decodeValue(ctx, value))
+        {
+            if (error != NULL)
+            {
+                ctx.getError(*error);
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+    static bool decode(const String& jsonStr, Value& value,
+                       Error* error = NULL)
+    {
+        return decode(jsonStr.c_str(), value, error);
     }
 
 
@@ -2072,11 +2074,10 @@ public:
             ctx.writeNewLine();
         }
     }
-
     static void encode(const Value& value, String& jsonStr,
                        const EncodeStyle* style = NULL)
     {
-        OSStream oss;
+        OStringStream oss;
         encode(value, oss, style);
         jsonStr = oss.str();
     }
@@ -2084,7 +2085,7 @@ public:
 
     // Equal
 
-    static bool equal(const Value& value, const String& jsonStr,
+    static bool equal(const Value& value, const char_t* jsonStr,
                       bool ignoreOrder = true, Error* error = NULL)
     {
         Value jsonValue;
@@ -2097,6 +2098,13 @@ public:
         return (value.compare(jsonValue, ignoreOrder) == 0);
     }
 
+    static bool equal(const Value& value, const String& jsonStr,
+                      bool ignoreOrder = true, Error* error = NULL)
+    {
+        return equal(value, jsonStr.c_str(), ignoreOrder, error);
+    }
+
+
     // Null value
     static const Value& null()
     {
@@ -2104,9 +2112,9 @@ public:
         return nullValue;
     }
 
-    //-----------------------------------------------------------------------//
+public:
+
     // Encoder
-    //-----------------------------------------------------------------------//
 
     static void encodeNull(EncodeContext& ctx)
     {
@@ -2346,10 +2354,7 @@ private:
     {
     public:
         UnreadableEncodeContext(OStream& os)
-            : EncodeContext(os)
-        {
-        }
-
+            : EncodeContext(os) {}
     public:
         void increaseIndent() {}
         void decreaseIndent() {}
@@ -2362,29 +2367,24 @@ private:
     class DecodeContext
     {
     public:
-        DecodeContext(const String& str)
-            : cur_(str.c_str())
+        DecodeContext()
         {
-            reset();
+            proc_ = 0;
+            errorCode_ = 0;
+            codeLine_ = 0;
         }
+
+        virtual ~DecodeContext() {}
 
     public:
-        const char_t* getCurrentAddress() const
-        {
-            return cur_.getCur();
-        }
+        virtual char_t getCurrentChar() const = 0;
+        virtual void nextChar() = 0;
+        virtual void nextLine() = 0;
+        virtual size_t getCurrentPos() const = 0;
+        virtual void savePos() = 0;
+        virtual size_t readFromSavePos(String& str) const = 0;
 
-        char_t getCurrentChar() const
-        {
-            return *getCurrentAddress();
-        }
-
-        void nextChar()
-        {
-            cur_.nextPos();
-            cur_.nextCol();
-        }
-
+    public:
         bool isEOF() const
         {
             return (getCurrentChar() == '\0');
@@ -2403,20 +2403,11 @@ private:
                 }
                 else if (getCurrentChar() == '\n')
                 {
-                    cur_.nextRow();
-                    cur_.nextPos();
+                    nextLine();
                     continue;
                 }
                 break;
             }
-        }
-
-        void reset()
-        {
-            cur_.reset();
-            proc_ = 0;
-            errorCode_ = 0;
-            codeLine_ = 0;
         }
 
         void setError(int32_t proc, int32_t errorCode,
@@ -2425,6 +2416,7 @@ private:
             proc_ = proc;
             errorCode_ = errorCode;
             codeLine_ = codeLine;
+            cur_.setPos(static_cast<uint32_t>(getCurrentPos()));
         }
 
         void getError(Error& error) const
@@ -2432,13 +2424,142 @@ private:
             error.setError(cur_, proc_, errorCode_, codeLine_);
         }
 
-    private:
+    protected:
         Cursor cur_;
         int32_t proc_;
         int32_t errorCode_;
         int32_t codeLine_;
+    };
+
+    class StringDecodeContext : public DecodeContext
+    {
+    public:
+        StringDecodeContext(const char_t* str)
+            : headAddr_(str), curAddr_(str), saveAddr_(NULL)
+        {
+        }
+
+    public:
+        char_t getCurrentChar() const
+        {
+            return *curAddr_;
+        }
+
+        void nextChar()
+        {
+            ++curAddr_;
+            DecodeContext::cur_.nextCol();
+        }
+
+        void nextLine()
+        {
+            ++curAddr_;
+            DecodeContext::cur_.nextRow();
+        }
+
+        size_t getCurrentPos() const
+        {
+            return (curAddr_ - headAddr_);
+        }
+
+        void savePos()
+        {
+            saveAddr_ = curAddr_;
+        }
+
+        size_t readFromSavePos(String& str) const
+        {
+            size_t size = curAddr_ - saveAddr_;
+            if (size == 0)
+            {
+                return 0;
+            }
+            str.append(saveAddr_, size);
+            return size;
+        }
+
+    private:
+        StringDecodeContext();
+        StringDecodeContext& operator=(const StringDecodeContext&);
+
+        const char_t* headAddr_;
+        const char_t* curAddr_;
+        const char_t* saveAddr_;
+    };
+
+    class StreamDecodeContext : public DecodeContext
+    {
+    public:
+        StreamDecodeContext(IStream& is)
+            : is_(is)
+        {
+        }
+
+    public:
+        char_t getCurrentChar() const
+        {
+            return static_cast<char_t>(is_.rdbuf()->sgetc());
+        }
+
+        void nextChar()
+        {
+            is_.rdbuf()->pubseekoff(
+                1, std::ios_base::cur, std::ios_base::in);
+
+            DecodeContext::cur_.nextCol();
+        }
+
+        void nextLine()
+        {
+            is_.rdbuf()->pubseekoff(
+                1, std::ios_base::cur, std::ios_base::in);
+
+            DecodeContext::cur_.nextRow();
+        }
+
+        size_t getCurrentPos() const
+        {
+            return static_cast<size_t>(is_.rdbuf()->pubseekoff(
+                0, std::ios_base::cur, std::ios_base::in));
+        }
+
+        void savePos()
+        {
+            savePos_ = getCurrentPos();
+        }
+
+        size_t readFromSavePos(String& str) const
+        {
+            std::streamsize size = getCurrentPos() - savePos_;
+            if (size == 0)
+            {
+                return 0;
+            }
+            size_t index = str.size();
+            str.resize(static_cast<size_t>(str.size() + size));
+
+            is_.rdbuf()->pubseekpos(savePos_);
+            std::streamsize readSize =
+#if !defined(JSONITY_OS_WINDOWS) || (_MSC_VER >= 1600)
+                is_.rdbuf()->sgetn(&str[index], size);
+#else
+                is_.rdbuf()->_Sgetn_s(&str[index], size, size);
+#endif
+            is_.rdbuf()->pubseekpos(savePos_ + readSize);
+
+            return static_cast<size_t>(readSize);
+        }
+
+    private:
+        StreamDecodeContext();
+        StreamDecodeContext& operator=(const StreamDecodeContext&);
+
+        IStream& is_;
+        size_t savePos_;
 
     }; // class JsonBase::DecodeContext
+
+private:
 
     static bool decodeNull(DecodeContext& ctx, Value& value)
     {
@@ -2480,7 +2601,7 @@ private:
                         (ctx.getCurrentChar() <= '9')) ||
                         (ctx.getCurrentChar() == '-'));
 
-        const char_t* head = ctx.getCurrentAddress();
+        ctx.savePos();
 
         if (ctx.getCurrentChar() == '-')
         {
@@ -2511,7 +2632,8 @@ private:
             }
         }
 
-        if (ctx.getCurrentAddress() == head)
+        String str;
+        if (ctx.readFromSavePos(str) == 0)
         {
             ctx.setError(
                 Error::NumberProc, Error::UnexpectedToken,
@@ -2519,11 +2641,7 @@ private:
             return false;
         }
 
-        String str;
-        str.assign(head,
-            static_cast<size_t>(ctx.getCurrentAddress() - head));
-
-        ISStream iss(str);
+        IStringStream iss(str);
         if (real)
         {
             double d;
@@ -2583,6 +2701,7 @@ private:
 
     static bool decodeCodePoint(DecodeContext& ctx, Value& value)
     {
+        JSONITY_ASSERT(value.isString());
         JSONITY_ASSERT(ctx.getCurrentChar() == 'u');
         ctx.nextChar();
 
@@ -2650,25 +2769,35 @@ private:
 
         if (codePoint1 <= 0x7f)
         {
-            str[size++] = (char_t)(codePoint1 & 0xff);
+            str[size++] =
+                static_cast<char_t>(codePoint1 & 0xff);
         }
         else if (codePoint1 <= 0x7ff)
         {
-            str[size++] = (char_t)(0xc0 | ((codePoint1 >> 6) & 0xff));
-            str[size++] = (char_t)(0x80 | ((codePoint1 & 0x3f)));
+            str[size++] =
+                static_cast<char_t>(0xc0 | ((codePoint1 >> 6) & 0xff));
+            str[size++] =
+                static_cast<char_t>(0x80 | ((codePoint1 & 0x3f)));
         }
         else if (codePoint1 <= 0xffff)
         {
-            str[size++] = (char_t)(0xe0 | ((codePoint1 >> 12) & 0xff));
-            str[size++] = (char_t)(0x80 | ((codePoint1 >> 6) & 0x3f));
-            str[size++] = (char_t)(0x80 | (codePoint1 & 0x3f));
+            str[size++] =
+                static_cast<char_t>(0xe0 | ((codePoint1 >> 12) & 0xff));
+            str[size++] =
+                static_cast<char_t>(0x80 | ((codePoint1 >> 6) & 0x3f));
+            str[size++] =
+                static_cast<char_t>(0x80 | (codePoint1 & 0x3f));
         }
         else if (codePoint1 <= 0x10ffff)
         {			
-            str[size++] = (char_t)(0xf0 | ((codePoint1 >> 18) & 0xff));
-            str[size++] = (char_t)(0x80 | ((codePoint1 >> 12) & 0x3f));
-            str[size++] = (char_t)(0x80 | ((codePoint1 >> 6) & 0x3f));
-            str[size++] = (char_t)(0x80 | (codePoint1 & 0x3f));
+            str[size++] =
+                static_cast<char_t>(0xf0 | ((codePoint1 >> 18) & 0xff));
+            str[size++] =
+                static_cast<char_t>(0x80 | ((codePoint1 >> 12) & 0x3f));
+            str[size++] =
+                static_cast<char_t>(0x80 | ((codePoint1 >> 6) & 0x3f));
+            str[size++] =
+                static_cast<char_t>(0x80 | (codePoint1 & 0x3f));
         }
         else
         {
@@ -2678,44 +2807,46 @@ private:
             return false;
         }
 
-        value.addString(str, size);
+        value.getString().append(str, size);
 
         return true;
     }
 
     static bool decodeEscapeChar(DecodeContext& ctx, Value& value)
     {
+        JSONITY_ASSERT(value.isString());
+
         if (ctx.getCurrentChar() == '"')
         {
-            value.addChar('\"');
+            value.getString().push_back('\"');
         }
         else if (ctx.getCurrentChar() == '\\')
         {
-            value.addChar('\\');
+            value.getString().push_back('\\');
         }
         else if (ctx.getCurrentChar() == '/')
         {
-            value.addChar('/');
+            value.getString().push_back('/');
         }
         else if (ctx.getCurrentChar() == 'b')
         {
-            value.addChar('\b');
+            value.getString().push_back('\b');
         }
         else if (ctx.getCurrentChar() == 'f')
         {
-            value.addChar('\f');
+            value.getString().push_back('\f');
         }
         else if (ctx.getCurrentChar() == 'n')
         {
-            value.addChar('\n');
+            value.getString().push_back('\n');
         }
         else if (ctx.getCurrentChar() == 'r')
         {
-            value.addChar('\r');
+            value.getString().push_back('\r');
         }
         else if (ctx.getCurrentChar() == 't')
         {
-            value.addChar('\t');
+            value.getString().push_back('\t');
         }
         else if (ctx.getCurrentChar() == 'u')
         {
@@ -2741,7 +2872,7 @@ private:
 
         value = String();
         bool escape = false;
-        const char_t* head = ctx.getCurrentAddress();
+        ctx.savePos();
 
         for (;;)
         {
@@ -2762,8 +2893,7 @@ private:
             {
                 if (ctx.getCurrentChar() == '\\')
                 {
-                    value.addString(head,
-                        static_cast<size_t>(ctx.getCurrentAddress() - head));
+                    ctx.readFromSavePos(value.getString());
                     escape = true;
                 }
 
@@ -2777,17 +2907,12 @@ private:
                 }
 
                 escape = false;
-                head = ctx.getCurrentAddress();
+                ctx.savePos();
             }
         }
 
-        size_t size =
-            static_cast<size_t>(ctx.getCurrentAddress() - head);
-        if (size > 0)
-        {
-            value.addString(head, size);
-            ctx.nextChar();
-        }
+        ctx.readFromSavePos(value.getString());
+        ctx.nextChar();
 
         return true;
     }
@@ -3101,6 +3226,11 @@ private:
 
 typedef JsonBase<char> Json_u8;
 typedef JsonBase<wchar_t> Json_u16;
+
+JSONITY_VALUE_OPERATOR_IOSTREAM(Json_u8);
+JSONITY_VALUE_OPERATOR_IOSTREAM(Json_u16);
+
+// standard
 typedef Json_u8 Json;
 
 } // namespace jsonity

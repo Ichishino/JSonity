@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <iostream>
 #include <list>
 #include <set>
 #include <deque>
@@ -26,8 +27,8 @@
 
 using namespace jsonity;
 
-#ifdef JSONITY_TEST_UNICODE
-#include "test_unicode.h"
+#ifdef _JSONITY_TEST_
+#include "test.h"
 #endif
 
 static const std::string jstr1 = 
@@ -1279,9 +1280,36 @@ void test15()
     }
 }
 
+void test16()
+{
+    {
+        std::string jsonStr =
+            "{"
+                "\"test1\" : 100,"
+                "\"test2\" : 200"
+            "}";
+
+        std::istringstream iss(jsonStr);
+
+        Json::Value v;
+        iss >> v;
+
+        JSONITY_ASSERT(iss);
+        JSONITY_ASSERT(Json::equal(v, jsonStr));
+
+        std::ostringstream oss;
+        oss << v;
+
+        JSONITY_ASSERT(oss);
+        JSONITY_ASSERT(oss.str() == "{\"test1\":100,\"test2\":200}");
+
+        std::cout << v << std::endl;
+    }
+}
+
 void example1_1()
 {
-    std::string jsonStr1 =
+    std::string jsonStr =
         "{"
             "\"name1\": 100,"
             "\"name2\": true,"
@@ -1294,7 +1322,7 @@ void example1_1()
         "}";
 
     Json::Value v;
-    Json::decode(jsonStr1, v);   // parse
+    Json::decode(jsonStr, v);   // parse
 
     size_t size = v.getSize();  // 4
 
@@ -1344,9 +1372,9 @@ void example1_1()
     return;
 }
 
-void example1_2()
+void example1_5()
 {
-    std::string jsonStr2 =
+    std::string jsonStr =
         "{"
             "\"name1\": {"
                 "\"data1\": ["
@@ -1363,7 +1391,7 @@ void example1_2()
         "}";
 
     Json::Value v;
-    Json::decode(jsonStr2, v);   // parse
+    Json::decode(jsonStr, v);   // parse
 
     double d = v["name1"]["data1"][0];    // -3.14
     const std::string& str = v["name1"]["data1"][1]; // "aaaa"
@@ -1433,7 +1461,7 @@ void example2_1()
     return;
 }
 
-void example2_2()
+void example2_4()
 {
     Json::Object root_obj;
 
@@ -1457,7 +1485,7 @@ void example2_2()
     return;
 }
 
-void example2_3()
+void example2_5()
 {
     std::map<std::string, std::string> map;  // any STL type (map, vector, list, set, ...)
 
@@ -1473,7 +1501,7 @@ void example2_3()
     JSONITY_ASSERT(jsonStr == "{\"name1\":\"data1\",\"name2\":\"data2\",\"name3\":\"data3\"}");
 }
 
-void example2_4()
+void example2_6()
 {
     std::map<std::string, std::list<MyData> > map;  // any STL type (map, vector, list, set, ...)
 
@@ -1496,7 +1524,7 @@ void example2_4()
     return;
 }
 
-void example2_5()
+void example2_7()
 {
     std::vector<int> list;  // any STL type (map, vector, list, set, ...)
 
@@ -1514,7 +1542,7 @@ void example2_5()
     return;
 }
 
-void example2_6()
+void example2_8()
 {
     std::map<std::string, std::vector<int> > map;
 
@@ -1623,20 +1651,22 @@ int main(int, char**) {
     test13();
     test14();
     test15();
+    test16();
 
-#ifdef JSONITY_TEST_UNICODE
+#ifdef _JSONITY_TEST_
     test_unicode();
+    read_file();
 #endif
 
     example1_1();
-    example1_2();
+    example1_5();
 
     example2_1();
-    example2_2();
-    example2_3();
     example2_4();
     example2_5();
     example2_6();
+    example2_7();
+    example2_8();
 
     example3_1();
     example3_2();
