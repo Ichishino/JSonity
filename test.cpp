@@ -1305,6 +1305,52 @@ void test16()
 
         std::cout << v << std::endl;
     }
+
+    {
+        Json::Object obj;
+
+        obj["test1"] = 100;
+        obj["test2"] = 200;
+
+        std::cout << obj << std::endl;
+    }
+
+    {
+        Json::Array arr(2);
+
+        arr[0] = 100;
+        arr[1] = 200;
+
+        std::cout << arr << std::endl;
+    }
+
+    {
+        std::map<std::string, std::list<int> > map;
+
+        std::list<int> list;
+        list.push_back(100);
+        list.push_back(200);
+
+        map["test1"] = list;
+        map["test2"] = list;
+
+        std::cout << map << std::endl;
+    }
+
+    {
+        std::list<std::map<std::string, int> > list;
+
+        std::map<std::string, int> map;
+        map["test1"] = 100;
+        map["test2"] = 200;
+
+        list.push_back(map);
+        list.push_back(map);
+
+        std::cout << list << std::endl;
+    }
+
+    return;
 }
 
 void example1_1()

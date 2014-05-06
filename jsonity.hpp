@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.1.0
+  JSonity : JSON Utility for C++   Version 1.1.1
 
   Copyright (c) 2014, Ichishino
 
@@ -63,6 +63,9 @@ typedef __int64 int64_t;
 #define JSONITY_ASSERT
 #endif
 
+
+// macro
+
 #define JSONITY_THROW_TYPE_MISMATCH() \
     (throw TypeMismatchException(__LINE__))
 
@@ -99,7 +102,17 @@ typedef __int64 int64_t;
             return is;  } \
     inline JsonType::OStream& operator<<( \
         JsonType::OStream& os, const JsonType::Value& value) \
-        {   JsonType::encode(value, os); return os; }
+        {   JsonType::encode(value, os); return os; } \
+    inline JsonType::OStream& operator<<( \
+        JsonType::OStream& os, const JsonType::Array& arr) \
+        {   JsonType::UnreadableEncodeContext ctx(os); \
+            JsonType::encodeArray(ctx, arr); \
+            return os;  } \
+    inline JsonType::OStream& operator<<( \
+        JsonType::OStream& os, const JsonType::Object& obj) \
+        {   JsonType::UnreadableEncodeContext ctx(os); \
+            JsonType::encodeObject(ctx, obj); \
+            return os;  }
 
 // namespace
 namespace jsonity {
@@ -2006,6 +2019,20 @@ public:
 
     }; // JsonBasic::EncodeContext
 
+    class UnreadableEncodeContext : public EncodeContext
+    {
+    public:
+        UnreadableEncodeContext(OStream& os)
+            : EncodeContext(os) {}
+    public:
+        void increaseIndent() {}
+        void decreaseIndent() {}
+        void writeIndent() {}
+        void writeNewLine() {}
+        void writeSeparator() {}
+        void writeEscape() {}
+    };
+
 public:
 
     //-----------------------------------------------------------------------//
@@ -2232,27 +2259,24 @@ public:
         ctx.getOutputStream() << real;
     }
 
-    static void encodeArray(EncodeContext& ctx, const Value& value)
+    static void encodeArray(EncodeContext& ctx, const Array& arr)
     {
-        JSONITY_ASSERT(value.isArray());
-
         ctx.getOutputStream() << '[';
 
-        if (!value.isEmpty())
+        if (!arr.empty())
         {
             ctx.writeNewLine();
             ctx.increaseIndent();
 
-            for (typename Array::const_iterator it =
-                    value.getArray().begin();
-                it != value.getArray().end();)
+            for (typename Array::const_iterator it = arr.begin();
+                it != arr.end();)
             {
                 ctx.writeIndent();
 
                 encodeValue(ctx, *it);
                 ++it;
 
-                if (it != value.getArray().end())
+                if (it != arr.end())
                 {
                     ctx.getOutputStream() << ',';
                     ctx.writeNewLine();
@@ -2267,20 +2291,22 @@ public:
         ctx.getOutputStream() << ']';
     }
 
-    static void encodeObject(EncodeContext& ctx, const Value& value)
+    static void encodeArray(EncodeContext& ctx, const Value& value)
     {
-        JSONITY_ASSERT(value.isObject());
+        encodeArray(ctx, value.getArray());
+    }
 
+    static void encodeObject(EncodeContext& ctx, const Object& obj)
+    {
         ctx.getOutputStream() << '{';
 
-        if (!value.isEmpty())
+        if (!obj.empty())
         {
             ctx.writeNewLine();
             ctx.increaseIndent();
 
-            for (typename Object::const_iterator it =
-                    value.getObject().begin();
-                it != value.getObject().end();)
+            for (typename Object::const_iterator it = obj.begin();
+                it != obj.end();)
             {
                 ctx.writeIndent();
 
@@ -2293,7 +2319,7 @@ public:
 
                 ++it;
 
-                if (it != value.getObject().end())
+                if (it != obj.end())
                 {
                     ctx.getOutputStream() << ',';
                     ctx.writeNewLine();
@@ -2306,6 +2332,11 @@ public:
         }
 
         ctx.getOutputStream() << '}';
+    }
+
+    static void encodeObject(EncodeContext& ctx, const Value& value)
+    {
+        encodeObject(ctx, value.getObject());
     }
 
     static void encodeValue(EncodeContext& ctx, const Value& value)
@@ -2332,11 +2363,11 @@ public:
         }
         else if (value.isArray())
         {
-            encodeArray(ctx, value);
+            encodeArray(ctx, value.getArray());
         }
         else if (value.isObject())
         {
-            encodeObject(ctx, value);
+            encodeObject(ctx, value.getObject());
         }
         else if (value.isUserValue())
         {
@@ -2349,20 +2380,6 @@ public:
     }
 
 private:
-
-    class UnreadableEncodeContext : public EncodeContext
-    {
-    public:
-        UnreadableEncodeContext(OStream& os)
-            : EncodeContext(os) {}
-    public:
-        void increaseIndent() {}
-        void decreaseIndent() {}
-        void writeIndent() {}
-        void writeNewLine() {}
-        void writeSeparator() {}
-        void writeEscape() {}
-    };
 
     class DecodeContext
     {
@@ -3227,8 +3244,8 @@ private:
 typedef JsonBase<char> Json_u8;
 typedef JsonBase<wchar_t> Json_u16;
 
-JSONITY_VALUE_OPERATOR_IOSTREAM(Json_u8);
-JSONITY_VALUE_OPERATOR_IOSTREAM(Json_u16);
+JSONITY_VALUE_OPERATOR_IOSTREAM(Json_u8)
+JSONITY_VALUE_OPERATOR_IOSTREAM(Json_u16)
 
 // standard
 typedef Json_u8 Json;
