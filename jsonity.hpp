@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.1.1
+  JSonity : JSON Utility for C++   Version 1.1.2
 
   Copyright (c) 2014, Ichishino
 
@@ -1652,6 +1652,7 @@ public:
         static const int32_t InvalidHex = 112;
         static const int32_t InvalidSurrogatePair = 113;
         static const int32_t SyntaxError = 114;
+        static const int32_t NotSupported = 115;
 
     public:
 
@@ -2555,14 +2556,18 @@ private:
             size_t index = str.size();
             str.resize(static_cast<size_t>(str.size() + size));
 
-            is_.rdbuf()->pubseekpos(savePos_);
+            is_.rdbuf()->pubseekpos(
+                savePos_, std::ios_base::in);
+
             std::streamsize readSize =
 #if !defined(JSONITY_OS_WINDOWS) || (_MSC_VER >= 1600)
                 is_.rdbuf()->sgetn(&str[index], size);
 #else
                 is_.rdbuf()->_Sgetn_s(&str[index], size, size);
 #endif
-            is_.rdbuf()->pubseekpos(savePos_ + readSize);
+
+            is_.rdbuf()->pubseekpos(
+                savePos_ + readSize, std::ios_base::in);
 
             return static_cast<size_t>(readSize);
         }
@@ -2784,42 +2789,93 @@ private:
         char_t str[4];
         size_t size = 0;
 
-        if (codePoint1 <= 0x7f)
+        size_t chSize = sizeof(char_t);     // TODO
+
+        if (chSize == 1)
         {
-            str[size++] =
-                static_cast<char_t>(codePoint1 & 0xff);
+            if (codePoint1 <= 0x7f)
+            {
+                str[size++] =
+                    static_cast<char_t>(codePoint1 & 0xff);
+            }
+            else if (codePoint1 <= 0x7ff)
+            {
+                str[size++] =
+                    static_cast<char_t>(0xc0 | ((codePoint1 >> 6) & 0xff));
+                str[size++] =
+                    static_cast<char_t>(0x80 | ((codePoint1 & 0x3f)));
+            }
+            else if (codePoint1 <= 0xffff)
+            {
+                str[size++] =
+                    static_cast<char_t>(0xe0 | ((codePoint1 >> 12) & 0xff));
+                str[size++] =
+                    static_cast<char_t>(0x80 | ((codePoint1 >> 6) & 0x3f));
+                str[size++] =
+                    static_cast<char_t>(0x80 | (codePoint1 & 0x3f));
+            }
+            else if (codePoint1 <= 0x10ffff)
+            {
+                str[size++] =
+                    static_cast<char_t>(0xf0 | ((codePoint1 >> 18) & 0xff));
+                str[size++] =
+                    static_cast<char_t>(0x80 | ((codePoint1 >> 12) & 0x3f));
+                str[size++] =
+                    static_cast<char_t>(0x80 | ((codePoint1 >> 6) & 0x3f));
+                str[size++] =
+                    static_cast<char_t>(0x80 | (codePoint1 & 0x3f));
+            }
+            else
+            {
+                ctx.setError(
+                    Error::CodePointProc, Error::InvalidSurrogatePair,
+                    __LINE__);
+                return false;
+            }
         }
-        else if (codePoint1 <= 0x7ff)
+        else if (chSize == 2)
         {
-            str[size++] =
-                static_cast<char_t>(0xc0 | ((codePoint1 >> 6) & 0xff));
-            str[size++] =
-                static_cast<char_t>(0x80 | ((codePoint1 & 0x3f)));
+            if (codePoint1 <= 0xffff)
+            {
+                str[size++] =
+                    static_cast<char_t>(codePoint1);
+            }
+            else if (codePoint1 <= 0x10ffff)
+            {
+			    str[size++] =
+                    static_cast<char_t>(
+                        0xd800 + ((codePoint1 - 0x10000) >> 10));
+			    str[size++] =
+                    static_cast<char_t>(
+                        0xdc00 + ((codePoint1 - 0x10000) & 0x3ff));
+            }
+            else
+            {
+                ctx.setError(
+                    Error::CodePointProc, Error::InvalidSurrogatePair,
+                    __LINE__);
+                return false;
+            }
         }
-        else if (codePoint1 <= 0xffff)
+        else if (chSize >= 4)
         {
-            str[size++] =
-                static_cast<char_t>(0xe0 | ((codePoint1 >> 12) & 0xff));
-            str[size++] =
-                static_cast<char_t>(0x80 | ((codePoint1 >> 6) & 0x3f));
-            str[size++] =
-                static_cast<char_t>(0x80 | (codePoint1 & 0x3f));
-        }
-        else if (codePoint1 <= 0x10ffff)
-        {			
-            str[size++] =
-                static_cast<char_t>(0xf0 | ((codePoint1 >> 18) & 0xff));
-            str[size++] =
-                static_cast<char_t>(0x80 | ((codePoint1 >> 12) & 0x3f));
-            str[size++] =
-                static_cast<char_t>(0x80 | ((codePoint1 >> 6) & 0x3f));
-            str[size++] =
-                static_cast<char_t>(0x80 | (codePoint1 & 0x3f));
+            if (codePoint1 <= 0x10ffff)
+            {
+                str[size++] =
+                    static_cast<char_t>(codePoint1);
+            }
+            else
+            {
+                ctx.setError(
+                    Error::CodePointProc, Error::InvalidSurrogatePair,
+                    __LINE__);
+                return false;
+            }
         }
         else
         {
             ctx.setError(
-                Error::CodePointProc, Error::InvalidSurrogatePair,
+                Error::CodePointProc, Error::NotSupported,
                 __LINE__);
             return false;
         }
@@ -3241,14 +3297,14 @@ private:
 // Json
 //---------------------------------------------------------------------------//
 
-typedef JsonBase<char> Json_u8;
-typedef JsonBase<wchar_t> Json_u16;
+typedef JsonBase<char> u8Json;
+typedef JsonBase<wchar_t> wJson;
 
-JSONITY_VALUE_OPERATOR_IOSTREAM(Json_u8)
-JSONITY_VALUE_OPERATOR_IOSTREAM(Json_u16)
+JSONITY_VALUE_OPERATOR_IOSTREAM(u8Json)
+JSONITY_VALUE_OPERATOR_IOSTREAM(wJson)
 
 // standard
-typedef Json_u8 Json;
+typedef u8Json Json;
 
 } // namespace jsonity
 

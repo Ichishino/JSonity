@@ -1353,6 +1353,24 @@ void test16()
     return;
 }
 
+void test17()
+{
+    {
+        std::wstring wjsonStr =
+            L"{"
+                L"\"test1\" : \"data1\","
+                L"\"test2\" : 222,"
+                L"\"test3\" : true"
+            L"}";
+
+        wJson::Value v;
+        JSONITY_ASSERT(wJson::decode(wjsonStr, v));
+
+        JSONITY_ASSERT(v.hasName(L"test1"));
+        JSONITY_ASSERT(v[L"test1"] == L"data1");
+    }
+}
+
 void example1_1()
 {
     std::string jsonStr =
@@ -1698,6 +1716,7 @@ int main(int, char**) {
     test14();
     test15();
     test16();
+    test17();
 
 #ifdef _JSONITY_TEST_
     test_unicode();
