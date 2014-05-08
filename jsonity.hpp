@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.1.2
+  JSonity : JSON Utility for C++   Version 1.1.3
 
   Copyright (c) 2014, Ichishino
 
@@ -51,9 +51,11 @@
 #ifdef JSONITY_SUPPORT_CXX_11
 #include <cstdint>
 #else
-typedef int int32_t; 
-typedef unsigned int uint32_t; 
+typedef int int32_t;
+typedef unsigned int uint32_t;
 typedef __int64 int64_t;
+typedef unsigned short char16_t;
+typedef uint32_t char32_t;
 #endif
 
 #ifndef NDEBUG
@@ -829,14 +831,24 @@ public:
 
         Value& operator[](const char_t* name)
         {
-            JSONITY_TYPE_CHECK(isObject());
-            return getObject()[name];
+            if (isNull())
+            {
+                assignObject(Object());
+            }
+
+            if (isObject())
+            {
+                return getObject()[name];
+            }
+            else
+            {
+                JSONITY_THROW_TYPE_MISMATCH();
+            }
         }
 
         Value& operator[](const String& name)
         {
-            JSONITY_TYPE_CHECK(isObject());
-            return getObject()[name];
+            return operator[](name.c_str());
         }
 
     public:
@@ -2077,6 +2089,7 @@ public:
 
         return true;
     }
+
     static bool decode(const String& jsonStr, Value& value,
                        Error* error = NULL)
     {
@@ -2102,6 +2115,7 @@ public:
             ctx.writeNewLine();
         }
     }
+
     static void encode(const Value& value, String& jsonStr,
                        const EncodeStyle* style = NULL)
     {
@@ -2842,10 +2856,10 @@ private:
             }
             else if (codePoint1 <= 0x10ffff)
             {
-			    str[size++] =
+                str[size++] =
                     static_cast<char_t>(
                         0xd800 + ((codePoint1 - 0x10000) >> 10));
-			    str[size++] =
+                str[size++] =
                     static_cast<char_t>(
                         0xdc00 + ((codePoint1 - 0x10000) & 0x3ff));
             }
@@ -3297,14 +3311,18 @@ private:
 // Json
 //---------------------------------------------------------------------------//
 
-typedef JsonBase<char> u8Json;
-typedef JsonBase<wchar_t> wJson;
+typedef JsonBase<char>      u8Json;
+typedef JsonBase<char16_t>  u16Json;
+typedef JsonBase<char32_t>  u32Json;
+typedef JsonBase<wchar_t>   wJson;
 
 JSONITY_VALUE_OPERATOR_IOSTREAM(u8Json)
+// JSONITY_VALUE_OPERATOR_IOSTREAM(u16Json)     // TODO
+// JSONITY_VALUE_OPERATOR_IOSTREAM(u32Json)     // TODO
 JSONITY_VALUE_OPERATOR_IOSTREAM(wJson)
 
 // standard
-typedef u8Json Json;
+typedef u8Json  Json;
 
 } // namespace jsonity
 

@@ -672,6 +672,25 @@ void test7()
         JSONITY_ASSERT(Json::equal(v, jsonStr));
     }
 
+
+    {
+        Json::Value v;
+        v["test1"]["test2"]["test3"] = 100;
+
+        std::string jsonStr;
+        Json::encode(v, jsonStr);
+
+        JSONITY_ASSERT(Json::equal(v,
+            "{"
+                "\"test1\": {"
+                    "\"test2\": {"
+                        "\"test3\": 100"
+                    "}"
+                "}"
+            "}"
+        ));
+    }
+
     return;
 }
 
