@@ -1,6 +1,6 @@
 /*
 
-  JSonity : JSON Utility for C++   Version 1.1.3
+  JSonity : JSON Utility for C++   Version 1.1.4
 
   Copyright (c) 2014, Ichishino
 
@@ -37,10 +37,14 @@
 #include <vector>
 #include <sstream>
 
+//---------------------------------------------------------------------------//
+// Platform
+//---------------------------------------------------------------------------//
+
 #if defined(_WINDOWS) || defined(_WIN32) || defined(_WIN64) 
 #define JSONITY_OS_WINDOWS
 #ifdef _MSC_VER
-#pragma warning (disable : 4503) // Disable truncated name warning
+#define JSONITY_COMPILER_MSVC
 #endif
 #endif
 
@@ -58,6 +62,24 @@ typedef unsigned short char16_t;
 typedef uint32_t char32_t;
 #endif
 
+#ifdef JSONITY_COMPILER_MSVC
+#define JSONITY_SNPRINTF  sprintf_s
+#define JSONITY_FORM_I64   "%I64d"
+#else
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+#define JSONITY_SNPRINTF  snprintf
+#define JSONITY_FORM_I64   "%"PRId64
+#endif
+
+#ifdef JSONITY_COMPILER_MSVC
+#pragma warning (disable : 4503) // Disable truncated name warning
+#endif
+
+//---------------------------------------------------------------------------//
+// Macro
+//---------------------------------------------------------------------------//
+
 #ifndef NDEBUG
 #include <cassert>
 #define JSONITY_ASSERT(exp) assert((exp))
@@ -65,8 +87,7 @@ typedef uint32_t char32_t;
 #define JSONITY_ASSERT
 #endif
 
-
-// macro
+#define JSONITY_CHAR(ch) (static_cast<char_t>(ch))
 
 #define JSONITY_THROW_TYPE_MISMATCH() \
     (throw TypeMismatchException(__LINE__))
@@ -699,10 +720,8 @@ public:
         {
             if (isString())
             {
-                IStringStream iss(getString());
                 int64_t number = 0;
-                iss >> number;
-                JSONITY_TYPE_CHECK(!iss.fail());
+                stringToInt(getString(), number);
                 return number;
             }
             else if (isNumber() || isReal() || isBoolean())
@@ -720,13 +739,13 @@ public:
             if (isNumber())
             {
                 OStringStream oss;
-                oss << getNumber();
+                intToStream(getNumber(), oss);
                 return oss.str();
             }
             else if (isReal())
             {
                 OStringStream oss;
-                oss << getReal();
+                doubleToStream(getReal(), oss);
                 return oss.str();
             }
             else if (isBoolean())
@@ -1765,7 +1784,7 @@ public:
         EncodeStyle()
         {
             style_ = 0;
-            separator_ = ' ';
+            separator_ = JSONITY_CHAR(' ');
             setStandardStyle();
         }
 
@@ -1787,7 +1806,7 @@ public:
         }
 
         void setIndent(bool enable,
-                       char_t indentChar = ' ',
+                       char_t indentChar = JSONITY_CHAR(' '),
                        size_t indentCharCount = 4)
         {
             if (enable)
@@ -1956,20 +1975,19 @@ public:
         {
             if (style_->isEnableIndent())
             {
-                for (size_t count = 0;
-                    count < (style_->getIndentCharCount() * indent_);
-                    ++count)
-                {
-                    EncodeContext::getOutputStream() <<
-                        style_->getIndentChar();
-                }
+                String indentStr;
+                indentStr.assign(
+                    style_->getIndentCharCount() * indent_,
+                    style_->getIndentChar());
+
+                writeString(indentStr.c_str());
             }
 
             if (style_->isEnableNewLine())
             {
                 if (style_->isEnableQuat())
                 {
-                    EncodeContext::getOutputStream() << '"';
+                    writeChar(JSONITY_CHAR('"'));
                 }
             }
         }
@@ -1978,40 +1996,60 @@ public:
         {
             if (style_->isEnablePrintNewLine())
             {
+                static const char_t str[] =
+                {
+                    JSONITY_CHAR('\\'),
+                    JSONITY_CHAR('r'),
+                    JSONITY_CHAR('\\'),
+                    JSONITY_CHAR('n'),
+                    JSONITY_CHAR('\0')
+                };
+
                 if (style_->isCRLF())
                 {
-                    EncodeContext::getOutputStream() << '\\' << 'r';
+                    writeString(str);
                 }
-                EncodeContext::getOutputStream() << '\\' << 'n';
+                else
+                {
+                    writeString(&str[2]);
+                }
             }
 
             if (style_->isEnableNewLine())
             {
                 if (style_->isEnableQuat())
                 {
-                    EncodeContext::getOutputStream() << '"';
+                    writeChar(JSONITY_CHAR('"'));
                 }
+
+                static const char_t str[] =
+                {
+                    JSONITY_CHAR('\r'),
+                    JSONITY_CHAR('\n'),
+                    JSONITY_CHAR('\0')
+                };
 
                 if (style_->isCRLF())
                 {
-                    EncodeContext::getOutputStream() << '\r';
+                    writeString(str);
                 }
-
-                EncodeContext::getOutputStream() << '\n';
+                else
+                {
+                    writeString(&str[1]);
+                }
             }
         }
 
         virtual void writeSeparator()
         {
-            EncodeContext::getOutputStream() <<
-                style_->getSeparatorChar();
+            writeChar(style_->getSeparatorChar());
         }
 
         virtual void writeEscape()
         {
             if (style_->isEnableEscape())
             {
-                EncodeContext::getOutputStream() << '\\';
+                writeChar(JSONITY_CHAR('\\'));
             }
         }
 
@@ -2021,9 +2059,37 @@ public:
             return os_;
         }
 
+        void writeString(const char_t* str, size_t size)
+        {
+            getOutputStream().write(str, size);
+        }
+
+        void writeString(const char_t* str)
+        {
+            getOutputStream() << str;
+        }
+
+        void writeChar(char_t ch)
+        {
+            char_t str[2];
+            str[0] = ch;
+            str[1] = JSONITY_CHAR('\0');
+            writeString(str);
+        }
+
+        void writeNumber(int64_t number)
+        {
+            intToStream(number, getOutputStream());
+        }
+
+        void writeReal(double real)
+        {
+            doubleToStream(real, getOutputStream());
+        }
+
     protected:
-		EncodeContext(const EncodeContext&);
-		EncodeContext& operator=(const EncodeContext&);
+        EncodeContext(const EncodeContext&);
+        EncodeContext& operator=(const EncodeContext&);
 
 	private:
         OStream& os_;
@@ -2160,82 +2226,96 @@ public:
 
     static void encodeNull(EncodeContext& ctx)
     {
-        ctx.getOutputStream() << 'n' << 'u' << 'l' << 'l';
+        static const char_t str[] =
+        {
+            JSONITY_CHAR('n'),
+            JSONITY_CHAR('u'),
+            JSONITY_CHAR('l'),
+            JSONITY_CHAR('l'),
+            JSONITY_CHAR('\0')
+        };
+
+        ctx.writeString(str);
     }
 
     static void encodeNumber(EncodeContext& ctx, int64_t number)
     {
-        ctx.getOutputStream() << number;
+        ctx.writeNumber(number);
     }
 
     static void encodeString(EncodeContext& ctx, const String& str)
     {
         ctx.writeEscape();
-        ctx.getOutputStream() << '\"';
+        ctx.writeChar(JSONITY_CHAR('\"'));
 
         const char_t* cur = str.c_str();
         const char_t* head = cur;
 
-        while ((*cur) != '\0')
+        while ((*cur) != JSONITY_CHAR('\0'))
         {
-            char_t escapePairCh = '\0';
+            char_t escapePairCh = JSONITY_CHAR('\0');
 
-            if ((*cur) == '"')
+            if ((*cur) == JSONITY_CHAR('"'))
             {
-                escapePairCh = '\"';
+                escapePairCh = JSONITY_CHAR('\"');
             }
-            else if ((*cur) == '\\')
+            else if ((*cur) == JSONITY_CHAR('\\'))
             {
-                escapePairCh = '\\';
+                escapePairCh = JSONITY_CHAR('\\');
             }
-            else if ((*cur) == '/')
+            else if ((*cur) == JSONITY_CHAR('/'))
             {
-                escapePairCh = '/';
+                escapePairCh = JSONITY_CHAR('/');
             }
-            else if ((*cur) == '\b')
+            else if ((*cur) == JSONITY_CHAR('\b'))
             {
-                escapePairCh = 'b';
+                escapePairCh = JSONITY_CHAR('b');
             }
-            else if ((*cur) == '\f')
+            else if ((*cur) == JSONITY_CHAR('\f'))
             {
-                escapePairCh = 'f';
+                escapePairCh = JSONITY_CHAR('f');
             }
-            else if ((*cur) == '\n')
+            else if ((*cur) == JSONITY_CHAR('\n'))
             {
-                escapePairCh = 'n';
+                escapePairCh = JSONITY_CHAR('n');
             }
-            else if ((*cur) == '\r')
+            else if ((*cur) == JSONITY_CHAR('\r'))
             {
-                escapePairCh = 'r';
+                escapePairCh = JSONITY_CHAR('r');
             }
-            else if ((*cur) == '\t')
+            else if ((*cur) == JSONITY_CHAR('\t'))
             {
-                escapePairCh = 't';
+                escapePairCh = JSONITY_CHAR('t');
             }
-            else if (((uint32_t)(*cur) < 0x20) ||
-                     ((uint32_t)(*cur) == 0x7f))
+            else if (((uint32_t)(*cur) < JSONITY_CHAR(0x20)) ||
+                     ((uint32_t)(*cur) == JSONITY_CHAR(0x7f)))
             {
-                escapePairCh = 'u';
+                escapePairCh = JSONITY_CHAR('u');
             }
 
-            if (escapePairCh != '\0')
+            if (escapePairCh != JSONITY_CHAR('\0'))
             {
-                ctx.getOutputStream().write(
+                ctx.writeString(
                     head, static_cast<size_t>(cur - head));
 
                 ctx.writeEscape();
-                ctx.getOutputStream() << '\\' << escapePairCh;
 
-                if (escapePairCh == 'u')
+                char_t escapeStr[3];
+                escapeStr[0] = JSONITY_CHAR('\\');
+                escapeStr[1] = escapePairCh;
+                escapeStr[2] = JSONITY_CHAR('\0');
+                ctx.writeString(escapeStr);
+
+                if (escapePairCh == JSONITY_CHAR('u'))
                 {
                     char_t hexStr[5];
-                    hexStr[0] = '0';
-                    hexStr[1] = '0';
+                    hexStr[0] = JSONITY_CHAR('0');
+                    hexStr[1] = JSONITY_CHAR('0');
                     encodeHex((uint32_t)(((*cur) & 0xf0) >> 4), hexStr[2]);
                     encodeHex((uint32_t)(((*cur) & 0x0f)), hexStr[3]);
-                    hexStr[4] = '\0';
+                    hexStr[4] = JSONITY_CHAR('\0');
 
-                    ctx.getOutputStream() << hexStr;
+                    ctx.writeString(hexStr);
                 }
 
                 ++cur;
@@ -2254,29 +2334,48 @@ public:
         }
 
         ctx.writeEscape();
-        ctx.getOutputStream() << '\"';
+        ctx.writeChar(JSONITY_CHAR('\"'));
     }
 
     static void encodeBoolean(EncodeContext& ctx, bool boolean)
     {
         if (boolean)
         {
-            ctx.getOutputStream() << 't' << 'r' << 'u' << 'e';
+            static const char_t str[] =
+            {
+                JSONITY_CHAR('t'),
+                JSONITY_CHAR('r'),
+                JSONITY_CHAR('u'),
+                JSONITY_CHAR('e'),
+                JSONITY_CHAR('\0')
+            };
+
+            ctx.writeString(str);
         }
         else
         {
-            ctx.getOutputStream() << 'f' << 'a' << 'l' << 's' << 'e';
+            static const char_t str[] =
+            {
+                JSONITY_CHAR('f'),
+                JSONITY_CHAR('a'),
+                JSONITY_CHAR('l'),
+                JSONITY_CHAR('s'),
+                JSONITY_CHAR('e'),
+                JSONITY_CHAR('\0')
+            };
+
+            ctx.writeString(str);
         }
     }
 
     static void encodeReal(EncodeContext& ctx, double real)
     {
-        ctx.getOutputStream() << real;
+        ctx.writeReal(real);
     }
 
     static void encodeArray(EncodeContext& ctx, const Array& arr)
     {
-        ctx.getOutputStream() << '[';
+        ctx.writeChar(JSONITY_CHAR('['));
 
         if (!arr.empty())
         {
@@ -2293,7 +2392,7 @@ public:
 
                 if (it != arr.end())
                 {
-                    ctx.getOutputStream() << ',';
+                    ctx.writeChar(JSONITY_CHAR(','));
                     ctx.writeNewLine();
                 }
             }
@@ -2303,7 +2402,7 @@ public:
             ctx.writeIndent();
         }
 
-        ctx.getOutputStream() << ']';
+        ctx.writeChar(JSONITY_CHAR(']'));
     }
 
     static void encodeArray(EncodeContext& ctx, const Value& value)
@@ -2313,7 +2412,7 @@ public:
 
     static void encodeObject(EncodeContext& ctx, const Object& obj)
     {
-        ctx.getOutputStream() << '{';
+        ctx.writeChar(JSONITY_CHAR('{'));
 
         if (!obj.empty())
         {
@@ -2327,7 +2426,7 @@ public:
 
                 encodeString(ctx, it->first);
 
-                ctx.getOutputStream() << ':';
+                ctx.writeChar(JSONITY_CHAR(':'));
                 ctx.writeSeparator();
 
                 encodeValue(ctx, it->second);
@@ -2336,7 +2435,7 @@ public:
 
                 if (it != obj.end())
                 {
-                    ctx.getOutputStream() << ',';
+                    ctx.writeChar(JSONITY_CHAR(','));
                     ctx.writeNewLine();
                 }
             }
@@ -2346,7 +2445,7 @@ public:
             ctx.writeIndent();
         }
 
-        ctx.getOutputStream() << '}';
+        ctx.writeChar(JSONITY_CHAR('}'));
     }
 
     static void encodeObject(EncodeContext& ctx, const Value& value)
@@ -2419,21 +2518,21 @@ private:
     public:
         bool isEOF() const
         {
-            return (getCurrentChar() == '\0');
+            return (getCurrentChar() == JSONITY_CHAR('\0'));
         }
 
         void skipWhiteSpace()
         {
             while (!isEOF())
             {
-                if ((getCurrentChar() == ' ') ||
-                    (getCurrentChar() == '\r') ||
-                    (getCurrentChar() == '\t'))
+                if ((getCurrentChar() == JSONITY_CHAR(' ')) ||
+                    (getCurrentChar() == JSONITY_CHAR('\r')) ||
+                    (getCurrentChar() == JSONITY_CHAR('\t')))
                 {
                     nextChar();
                     continue;
                 }
-                else if (getCurrentChar() == '\n')
+                else if (getCurrentChar() == JSONITY_CHAR('\n'))
                 {
                     nextLine();
                     continue;
@@ -2599,10 +2698,17 @@ private:
 
     static bool decodeNull(DecodeContext& ctx, Value& value)
     {
-        static const char_t null_str[] = { 'n', 'u', 'l', 'l' };
+        static const char_t str[] =
+        {
+            JSONITY_CHAR('n'),
+            JSONITY_CHAR('u'),
+            JSONITY_CHAR('l'),
+            JSONITY_CHAR('l'),
+            JSONITY_CHAR('\0')
+        };
 
         JSONITY_ASSERT(
-            ctx.getCurrentChar() == null_str[0]);
+            ctx.getCurrentChar() == str[0]);
         ctx.nextChar();
 
         for (size_t index = 1; index < 4; ++index)
@@ -2615,7 +2721,7 @@ private:
                 return false;
             }
 
-            if (ctx.getCurrentChar() != null_str[index])
+            if (ctx.getCurrentChar() != str[index])
             {
                 ctx.setError(
                     Error::NullProc, Error::UnexpectedToken,
@@ -2633,13 +2739,14 @@ private:
 
     static bool decodeNumber(DecodeContext& ctx, Value& value)
     {
-        JSONITY_ASSERT(((ctx.getCurrentChar() >= '0') &&
-                        (ctx.getCurrentChar() <= '9')) ||
-                        (ctx.getCurrentChar() == '-'));
+        JSONITY_ASSERT(
+            ((ctx.getCurrentChar() >= JSONITY_CHAR('0')) &&
+             (ctx.getCurrentChar() <= JSONITY_CHAR('9'))) ||
+             (ctx.getCurrentChar() == JSONITY_CHAR('-')));
 
         ctx.savePos();
 
-        if (ctx.getCurrentChar() == '-')
+        if (ctx.getCurrentChar() == JSONITY_CHAR('-'))
         {
             ctx.nextChar();
         }
@@ -2648,16 +2755,16 @@ private:
 
         while (!ctx.isEOF())
         {
-            if ((ctx.getCurrentChar() >= '0') &&
-                (ctx.getCurrentChar() <= '9'))
+            if ((ctx.getCurrentChar() >= JSONITY_CHAR('0')) &&
+                (ctx.getCurrentChar() <= JSONITY_CHAR('9')))
             {
                 ctx.nextChar();
             }
-            else if ((ctx.getCurrentChar() == 'e') ||
-                     (ctx.getCurrentChar() == 'E') ||
-                     (ctx.getCurrentChar() == '-') ||
-                     (ctx.getCurrentChar() == '+') ||
-                     (ctx.getCurrentChar() == '.'))
+            else if ((ctx.getCurrentChar() == JSONITY_CHAR('e')) ||
+                     (ctx.getCurrentChar() == JSONITY_CHAR('E')) ||
+                     (ctx.getCurrentChar() == JSONITY_CHAR('-')) ||
+                     (ctx.getCurrentChar() == JSONITY_CHAR('+')) ||
+                     (ctx.getCurrentChar() == JSONITY_CHAR('.')))
             {
                 real = true;
                 ctx.nextChar();
@@ -2677,12 +2784,10 @@ private:
             return false;
         }
 
-        IStringStream iss(str);
         if (real)
         {
-            double d;
-            iss >> d;
-            if (iss.fail())
+            double d = 0;
+            if (!stringToDouble(str, d))
             {
                 ctx.setError(
                     Error::RealProc, Error::SyntaxError,
@@ -2693,9 +2798,8 @@ private:
         }
         else
         {
-            int64_t n;
-            iss >> n;
-            if (iss.fail())
+            int64_t n = 0;
+            if (!stringToInt(str, n))
             {
                 ctx.setError(
                     Error::NumberProc, Error::SyntaxError,
@@ -2738,7 +2842,7 @@ private:
     static bool decodeCodePoint(DecodeContext& ctx, Value& value)
     {
         JSONITY_ASSERT(value.isString());
-        JSONITY_ASSERT(ctx.getCurrentChar() == 'u');
+        JSONITY_ASSERT(ctx.getCurrentChar() == JSONITY_CHAR('u'));
         ctx.nextChar();
 
         uint32_t codePoint1;
@@ -2753,7 +2857,7 @@ private:
 
         if ((codePoint1 >= 0xd800) && (codePoint1 <= 0xdbff))
         {
-            if (ctx.getCurrentChar() == '\\')
+            if (ctx.getCurrentChar() == JSONITY_CHAR('\\'))
             {
                 ctx.nextChar();
 
@@ -2765,7 +2869,7 @@ private:
                     return false;
                 }
 
-                if (ctx.getCurrentChar() != 'u')
+                if (ctx.getCurrentChar() != JSONITY_CHAR('u'))
                 {
                     ctx.setError(
                         Error::CodePointProc, Error::UnexpectedToken,
@@ -2903,39 +3007,39 @@ private:
     {
         JSONITY_ASSERT(value.isString());
 
-        if (ctx.getCurrentChar() == '"')
+        if (ctx.getCurrentChar() == JSONITY_CHAR('"'))
         {
-            value.getString().push_back('\"');
+            value.getString().push_back(JSONITY_CHAR('\"'));
         }
-        else if (ctx.getCurrentChar() == '\\')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('\\'))
         {
-            value.getString().push_back('\\');
+            value.getString().push_back(JSONITY_CHAR('\\'));
         }
-        else if (ctx.getCurrentChar() == '/')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('/'))
         {
-            value.getString().push_back('/');
+            value.getString().push_back(JSONITY_CHAR('/'));
         }
-        else if (ctx.getCurrentChar() == 'b')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('b'))
         {
-            value.getString().push_back('\b');
+            value.getString().push_back(JSONITY_CHAR('\b'));
         }
-        else if (ctx.getCurrentChar() == 'f')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('f'))
         {
-            value.getString().push_back('\f');
+            value.getString().push_back(JSONITY_CHAR('\f'));
         }
-        else if (ctx.getCurrentChar() == 'n')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('n'))
         {
-            value.getString().push_back('\n');
+            value.getString().push_back(JSONITY_CHAR('\n'));
         }
-        else if (ctx.getCurrentChar() == 'r')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('r'))
         {
-            value.getString().push_back('\r');
+            value.getString().push_back(JSONITY_CHAR('\r'));
         }
-        else if (ctx.getCurrentChar() == 't')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('t'))
         {
-            value.getString().push_back('\t');
+            value.getString().push_back(JSONITY_CHAR('\t'));
         }
-        else if (ctx.getCurrentChar() == 'u')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('u'))
         {
             return decodeCodePoint(ctx, value);
         }
@@ -2954,7 +3058,8 @@ private:
 
     static bool decodeString(DecodeContext& ctx, Value& value)
     {
-        JSONITY_ASSERT(ctx.getCurrentChar() == '"');
+        JSONITY_ASSERT(
+            ctx.getCurrentChar() == JSONITY_CHAR('"'));
         ctx.nextChar();
 
         value = String();
@@ -2963,7 +3068,8 @@ private:
 
         for (;;)
         {
-            if (!escape && (ctx.getCurrentChar() == '"'))
+            if (!escape &&
+                (ctx.getCurrentChar() == JSONITY_CHAR('"')))
             {
                 break;
             }
@@ -2978,7 +3084,7 @@ private:
 
             if (!escape)
             {
-                if (ctx.getCurrentChar() == '\\')
+                if (ctx.getCurrentChar() == JSONITY_CHAR('\\'))
                 {
                     ctx.readFromSavePos(value.getString());
                     escape = true;
@@ -3006,10 +3112,17 @@ private:
 
     static bool decodeTrue(DecodeContext& ctx, Value& value)
     {
-        static const char_t true_str[] = { 't', 'r', 'u', 'e' };
+        static const char_t str[] =
+        {
+            JSONITY_CHAR('t'),
+            JSONITY_CHAR('r'),
+            JSONITY_CHAR('u'),
+            JSONITY_CHAR('e'),
+            JSONITY_CHAR('\0')
+        };
 
         JSONITY_ASSERT(
-            ctx.getCurrentChar() == true_str[0]);
+            ctx.getCurrentChar() == str[0]);
         ctx.nextChar();
 
         for (size_t index = 1; index < 4; ++index)
@@ -3022,7 +3135,7 @@ private:
                 return false;
             }
 
-            if (ctx.getCurrentChar() != true_str[index])
+            if (ctx.getCurrentChar() != str[index])
             {
                 ctx.setError(
                     Error::TrueProc, Error::UnexpectedToken,
@@ -3040,10 +3153,18 @@ private:
 
     static bool decodeFalse(DecodeContext& ctx, Value& value)
     {
-        static const char_t false_str[] = { 'f', 'a', 'l', 's', 'e' };
+        static const char_t str[] =
+        {
+            JSONITY_CHAR('f'),
+            JSONITY_CHAR('a'),
+            JSONITY_CHAR('l'),
+            JSONITY_CHAR('s'),
+            JSONITY_CHAR('e'),
+            JSONITY_CHAR('\0')
+        };
 
         JSONITY_ASSERT(
-            ctx.getCurrentChar() == false_str[0]);
+            ctx.getCurrentChar() == str[0]);
         ctx.nextChar();
 
         for (size_t index = 1; index < 5; ++index)
@@ -3056,7 +3177,7 @@ private:
                 return false;
             }
 
-            if (ctx.getCurrentChar() != false_str[index])
+            if (ctx.getCurrentChar() != str[index])
             {
                 ctx.setError(
                     Error::FalseProc, Error::UnexpectedToken,
@@ -3074,7 +3195,8 @@ private:
 
     static bool decodeArray(DecodeContext& ctx, Value& value)
     {
-        JSONITY_ASSERT(ctx.getCurrentChar() == '[');
+        JSONITY_ASSERT(
+            ctx.getCurrentChar() == JSONITY_CHAR('['));
         ctx.nextChar();
         ctx.skipWhiteSpace();
 
@@ -3082,7 +3204,7 @@ private:
 
         bool separator = true;
 
-        while (ctx.getCurrentChar() != ']')
+        while (ctx.getCurrentChar() != JSONITY_CHAR(']'))
         {
             if (ctx.isEOF())
             {
@@ -3109,7 +3231,7 @@ private:
             ctx.skipWhiteSpace();
 
             separator = false;
-            if (ctx.getCurrentChar() == ',')
+            if (ctx.getCurrentChar() == JSONITY_CHAR(','))
             {
                 ctx.nextChar();
                 separator = true;
@@ -3131,7 +3253,8 @@ private:
 
     static bool decodeObject(DecodeContext& ctx, Value& value)
     {
-        JSONITY_ASSERT(ctx.getCurrentChar() == '{');
+        JSONITY_ASSERT(
+            ctx.getCurrentChar() == JSONITY_CHAR('{'));
         ctx.nextChar();
         ctx.skipWhiteSpace();
 
@@ -3139,7 +3262,7 @@ private:
         
         bool separator = true;
 
-        while (ctx.getCurrentChar() != '}')
+        while (ctx.getCurrentChar() != JSONITY_CHAR('}'))
         {
             if (ctx.isEOF())
             {
@@ -3173,7 +3296,7 @@ private:
 
             ctx.skipWhiteSpace();
 
-            if (ctx.getCurrentChar() != ':')
+            if (ctx.getCurrentChar() != JSONITY_CHAR(':'))
             {
                 ctx.setError(
                     Error::ObjectProc, Error::ExpectedColon,
@@ -3192,7 +3315,7 @@ private:
             ctx.skipWhiteSpace();
 
             separator = false;
-            if (ctx.getCurrentChar() == ',')
+            if (ctx.getCurrentChar() == JSONITY_CHAR(','))
             {
                 ctx.nextChar();
                 ctx.skipWhiteSpace();
@@ -3224,33 +3347,33 @@ private:
                 __LINE__);
             return false;
         }
-        else if (ctx.getCurrentChar() == '"')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('"'))
         {
             return decodeString(ctx, value);
         }
-        else if (((ctx.getCurrentChar() >= '0') &&
-                  (ctx.getCurrentChar() <= '9')) ||
-                  (ctx.getCurrentChar() == '-'))
+        else if (((ctx.getCurrentChar() >= JSONITY_CHAR('0')) &&
+                  (ctx.getCurrentChar() <= JSONITY_CHAR('9'))) ||
+                  (ctx.getCurrentChar() == JSONITY_CHAR('-')))
         {
             return decodeNumber(ctx, value);
         }
-        else if (ctx.getCurrentChar() == '{')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('{'))
         {
             return decodeObject(ctx, value);
         }
-        else if (ctx.getCurrentChar() == '[')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('['))
         {
             return decodeArray(ctx, value);
         }
-        else if (ctx.getCurrentChar() == 't')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('t'))
         {
             return decodeTrue(ctx, value);
         }
-        else if (ctx.getCurrentChar() == 'f')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('f'))
         {
             return decodeFalse(ctx, value);
         }
-        else if (ctx.getCurrentChar() == 'n')
+        else if (ctx.getCurrentChar() == JSONITY_CHAR('n'))
         {
             return decodeNull(ctx, value);
         }
@@ -3265,19 +3388,25 @@ private:
 
 private:
 
-    static bool decodeHex(CharType ch, uint32_t& value)
+    static bool decodeHex(char_t ch, uint32_t& value)
     {
-        if ((ch >= '0') && (ch <= '9'))
+        if ((ch >= JSONITY_CHAR('0')) &&
+            (ch <= JSONITY_CHAR('9')))
         {
-            value = (uint32_t)(ch - '0');
+            value = static_cast<uint32_t>(
+                ch - JSONITY_CHAR('0'));
         }
-        else if ((ch >= 'a') && (ch <= 'f'))
+        else if ((ch >= JSONITY_CHAR('a')) &&
+                 (ch <= JSONITY_CHAR('f')))
         {
-            value = (uint32_t)(ch - 'a' + 10);
+            value = static_cast<uint32_t>(
+                ch - JSONITY_CHAR('a') + 10);
         }
-        else if ((ch >= 'A') && (ch <= 'F'))
+        else if ((ch >= JSONITY_CHAR('A')) &&
+                 (ch <= JSONITY_CHAR('F')))
         {
-            value = (uint32_t)(ch - 'A' + 10);
+            value = static_cast<uint32_t>(
+                ch - JSONITY_CHAR('A') + 10);
         }
         else
         {
@@ -3287,18 +3416,281 @@ private:
         return true;
     }
 
-    static bool encodeHex(uint32_t value, CharType& ch)
+    static bool encodeHex(uint32_t value, char_t& ch)
     {
         static const char hex[] = "0123456789ABCDEF";
 
         if (value < 16)
         {
-            ch = hex[value];
+            ch = static_cast<char_t>(hex[value]);
             return true;
         }
         else
         {
             return false;
+        }
+    }
+
+	static bool isDigit(char_t ch)
+	{
+        return ((((unsigned)ch) >= JSONITY_CHAR('0')) &&
+                (((unsigned)ch) <= JSONITY_CHAR('9')));
+	}
+
+	static bool stringToDouble(const String& src, double& dest)
+	{
+        bool sign = false;
+        const char_t* pch = src.c_str();
+
+        if ((*pch) == JSONITY_CHAR('-'))
+        {
+            sign = true;
+            ++pch;
+        }
+
+        int32_t pt = -1;
+        int32_t msize = 0;
+        for (;;)
+        {
+            char_t ch = *pch;
+            if (!isDigit(ch))
+            {
+                if ((ch != JSONITY_CHAR('.')) || (pt >= 0))
+                {
+                    break;
+                }
+                pt = msize;
+            }
+            ++pch;
+            ++msize;
+        }
+
+        const char_t* pexp = pch;
+        pch -= msize;
+        if (pt < 0)
+        {
+            pt = msize;
+        }
+        else
+        {
+            --msize;
+        }
+
+        int32_t fexp = 0;
+        if (msize > 18)
+        {
+            fexp = pt - 18;
+            msize = 18;
+        }
+        else
+        {
+            fexp = pt - msize;
+        }
+
+        if (msize == 0)
+        {
+            dest = 0.0;
+            return true;
+        }
+
+        int32_t frac1 = 0;
+        for (; msize > 9; --msize)
+        {
+            char_t ch = *pch;
+            ++pch;
+            if (ch == '.')
+            {
+                ch = *pch;
+                ++pch;
+            }
+            frac1 = 10 * frac1 + (ch - JSONITY_CHAR('0'));
+        }
+        int32_t frac2 = 0;
+        for (; msize > 0; --msize)
+        {
+            char_t ch = *pch;
+            ++pch;
+            if (ch == JSONITY_CHAR('.'))
+            {
+                ch = *pch;
+                ++pch;
+            }
+            frac2 = 10 * frac2 + (ch - JSONITY_CHAR('0'));
+        }
+        dest = (1.0e9 * frac1) + frac2;
+
+        int32_t exp = 0;
+        bool esign = false;
+        pch = pexp;
+        if (((*pch) == JSONITY_CHAR('e')) ||
+            ((*pch) == JSONITY_CHAR('E')))
+        {
+            ++pch;
+            if ((*pch) == JSONITY_CHAR('-'))
+            {
+                esign = true;
+                ++pch;
+            }
+            else if ((*pch) == JSONITY_CHAR('+'))
+            {
+                ++pch;
+            }
+
+            if (!isDigit(*pch))
+            {
+                return false;
+            }
+
+            while (isDigit(*pch))
+            {
+                exp = exp * 10 +
+                    ((*pch) - JSONITY_CHAR('0'));
+                ++pch;
+            }
+        }
+
+        if (esign)
+        {
+            exp = fexp - exp;
+        }
+        else
+        {
+            exp = fexp + exp;
+        }
+
+        if (exp < 0)
+        {
+            esign = true;
+            exp = -exp;
+        }
+        else
+        {
+            esign = false;
+        }
+
+        if (exp >= 512)
+        {
+            exp = 511;
+        }
+
+        double dexp = 1.0;
+
+        static const double powers[] =
+        {
+            10.0, 100.0, 1.0e4, 1.0e8, 1.0e16,
+            1.0e32, 1.0e64, 1.0e128, 1.0e256
+        };
+
+        for (const double* power = powers;
+            exp != 0; exp >>= 1, ++power)
+        {
+            if (exp & 01)
+            {
+                dexp *= *power;
+            }
+        }
+
+        if (esign)
+        {
+            dest /= dexp;
+        }
+        else
+        {
+            dest *= dexp;
+        }
+
+        if (sign)
+        {
+            dest = -dest;
+        }
+
+        return true;
+	}
+
+	static bool stringToInt(const String& src, int64_t& dest)
+	{
+        bool sign = false;
+        const char_t* endp = src.c_str();
+
+        if ((src.length() >= 2) &&
+            ((*endp) == JSONITY_CHAR('-')))
+        {
+            ++endp;
+            sign = true;
+        }
+        else if (src.length() == 0)
+        {
+            return false;
+        }
+
+        int32_t power = 1;
+
+        for (const char_t* pch =
+            src.c_str() + (src.length() - 1);
+            pch >= endp; --pch)
+        {
+            char_t ch = *pch;
+            if (!isDigit(ch))
+            {
+                return false;
+            }
+            dest += ((ch - JSONITY_CHAR('0')) * power);
+            power *= 10;
+        }
+
+        if (sign)
+        {
+            dest = -dest;
+        }
+
+        return true;
+	}
+
+    static void intToStream(int64_t number, OStream& os)
+    {
+        char str1[256];
+        int size = JSONITY_SNPRINTF(
+            str1, sizeof(str1), JSONITY_FORM_I64, number);
+
+        size_t chSize = sizeof(char_t); // TODO
+        if (chSize == sizeof(char))
+        {
+            os << str1;
+        }
+        else
+        {
+            char_t str2[256];
+            for (int index = 0; index < size; ++index)
+            {
+                str2[index] = static_cast<char_t>(str1[index]);
+            }
+            str2[size] = '\0';
+
+            os << str2;
+        }
+    }
+
+    static void doubleToStream(double d, OStream& os)
+    {
+        char str1[256];
+        int size = JSONITY_SNPRINTF(
+            str1, sizeof(str1), "%g", d);
+
+        size_t chSize = sizeof(char_t); // TODO
+        if (chSize == sizeof(char))
+        {
+            os << str1;
+        }
+        else
+        {
+            char_t str2[256];
+            for (int index = 0; index < size; ++index)
+            {
+                str2[index] = static_cast<char_t>(str1[index]);
+            }
+            str2[size] = '\0';
+
+            os << str2;
         }
     }
 
@@ -3317,8 +3709,8 @@ typedef JsonBase<char32_t>  u32Json;
 typedef JsonBase<wchar_t>   wJson;
 
 JSONITY_VALUE_OPERATOR_IOSTREAM(u8Json)
-// JSONITY_VALUE_OPERATOR_IOSTREAM(u16Json)     // TODO
-// JSONITY_VALUE_OPERATOR_IOSTREAM(u32Json)     // TODO
+JSONITY_VALUE_OPERATOR_IOSTREAM(u16Json)
+JSONITY_VALUE_OPERATOR_IOSTREAM(u32Json)
 JSONITY_VALUE_OPERATOR_IOSTREAM(wJson)
 
 // standard

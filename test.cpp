@@ -1375,7 +1375,7 @@ void test16()
 void test17()
 {
     {
-        std::wstring wjsonStr =
+        std::wstring wjsonStr1 =
             L"{"
                 L"\"test1\" : \"data1\","
                 L"\"test2\" : 222,"
@@ -1383,11 +1383,65 @@ void test17()
             L"}";
 
         wJson::Value v;
-        JSONITY_ASSERT(wJson::decode(wjsonStr, v));
+        JSONITY_ASSERT(wJson::decode(wjsonStr1, v));
+        JSONITY_ASSERT(wJson::equal(v, wjsonStr1));
 
         JSONITY_ASSERT(v.hasName(L"test1"));
         JSONITY_ASSERT(v[L"test1"] == L"data1");
+
+        std::wstring wjsonStr2;
+        wJson::encode(v, wjsonStr2);
+
+        JSONITY_ASSERT(wJson::equal(v, wjsonStr2));
     }
+
+#if defined(JSONITY_SUPPORT_CXX_11) && !defined(JSONITY_COMPILER_MSVC)
+	{
+        std::u16string u16jsonStr1 =
+            u"{"
+                u"\"test1\" : \"data1\","
+                u"\"test2\" : 222,"
+                u"\"test3\" : true"
+            u"}";
+
+        u16Json::Value v;
+        JSONITY_ASSERT(u16Json::decode(u16jsonStr1, v));
+        JSONITY_ASSERT(u16Json::equal(v, u16jsonStr1));
+
+        JSONITY_ASSERT(v.hasName(u"test1"));
+        JSONITY_ASSERT(v[u"test1"] == u"data1");
+
+        std::u16string u16jsonStr2;
+        u16Json::encode(v, u16jsonStr2);
+
+        JSONITY_ASSERT(u16Json::equal(v, u16jsonStr2));
+    }
+
+    {
+        std::u32string u32jsonStr1 =
+            U"{"
+                U"\"test1\" : \"data1\","
+                U"\"test2\" : 222,"
+                U"\"test3\" : true"
+            U"}";
+
+        u32Json::Value v;
+        JSONITY_ASSERT(u32Json::decode(u32jsonStr1, v));
+        JSONITY_ASSERT(u32Json::equal(v, u32jsonStr1));
+
+        JSONITY_ASSERT(v.hasName(U"test1"));
+        JSONITY_ASSERT(v[U"test1"] == U"data1");
+
+        std::u32string u32jsonStr2;
+        u32Json::encode(v, u32jsonStr2);
+
+        JSONITY_ASSERT(u32Json::equal(v, u32jsonStr2));
+
+	}
+
+    {
+    }
+#endif
 }
 
 void example1_1()
