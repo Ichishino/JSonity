@@ -14,7 +14,7 @@
 
 #include "jsonity.hpp"
 
-#ifdef WIN32
+#ifdef JSONITY_OS_WINDOWS
 #include <tchar.h>
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h> 
@@ -1410,6 +1410,9 @@ void test17()
 
         JSONITY_ASSERT(v.hasName(u"test1"));
         JSONITY_ASSERT(v[u"test1"] == u"data1");
+        JSONITY_ASSERT(v[u"test2"].toString() == u"222");
+        JSONITY_ASSERT(v[u"test3"].toString() == u"1");
+        JSONITY_ASSERT(v[u"test3"].toNumber() == 1);
 
         std::u16string u16jsonStr2;
         u16Json::encode(v, u16jsonStr2);
@@ -1431,6 +1434,9 @@ void test17()
 
         JSONITY_ASSERT(v.hasName(U"test1"));
         JSONITY_ASSERT(v[U"test1"] == U"data1");
+        JSONITY_ASSERT(v[U"test2"].toString() == U"222");
+        JSONITY_ASSERT(v[U"test3"].toString() == U"1");
+        JSONITY_ASSERT(v[U"test3"].toNumber() == 1);
 
         std::u32string u32jsonStr2;
         u32Json::encode(v, u32jsonStr2);
@@ -1762,7 +1768,7 @@ void example3_2()
     JSONITY_ASSERT(!result3);
 }
 
-#ifdef WIN32
+#ifdef JSONITY_OS_WINDOWS
 int _tmain(int, _TCHAR**) {
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #else
