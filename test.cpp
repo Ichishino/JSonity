@@ -702,7 +702,7 @@ void test8()
 
         // Human readable
         Json::EncodeStyle es;
-        es.setStandardStyle();
+        es.setPrettyStyle();
 
         Json::String s;
         Json::encode(v, s, &es);
@@ -1697,7 +1697,7 @@ void example2_8()
     map["test"] = vec;
 
     Json::EncodeStyle es1;
-    es1.setStandardStyle();
+    es1.setPrettyStyle();
 
     std::string jsonStr1;
     Json::encode(map, jsonStr1, &es1);  // serialize (Human Readable)
